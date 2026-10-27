@@ -46,6 +46,7 @@ Route::middleware(['auth:sanctum', 'role:hr'])->group(function () {
     Route::get('/candidates', [CandidateController::class, 'index']);
     Route::get('/candidates/{candidate}', [CandidateController::class, 'show']);
     Route::patch('/candidates/{candidate}/notes', [CandidateController::class, 'updateNotes']);
+    Route::delete('/candidates/{candidate}', [CandidateController::class, 'destroy']);
     Route::get('/candidates/{candidate}/resume', [ApplicationController::class, 'downloadResume']);
     Route::get('/applications', [ApplicationController::class, 'index']);
     Route::patch('/applications/{application}', [ApplicationController::class, 'update']);

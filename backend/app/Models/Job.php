@@ -12,6 +12,8 @@ class Job extends Model
         'user_id',
         'title',
         'description',
+        'department',
+        'employment_type',
         'required_skills_json',
         'experience_requirements',
         'status',

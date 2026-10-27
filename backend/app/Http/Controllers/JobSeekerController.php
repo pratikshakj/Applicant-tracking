@@ -26,7 +26,7 @@ class JobSeekerController extends Controller
         $user = $request->user();
         $latestResume = Candidate::where('user_id', $user->id)
             ->latest()
-            ->first(['id', 'status', 'parsed_name', 'extracted_skills_json', 'created_at', 'error']);
+            ->first(['id', 'status', 'parsed_name', 'parsed_email', 'parsed_phone', 'parsed_education_json', 'parsed_experience_json', 'extracted_skills_json', 'created_at', 'error']);
 
         return response()->json([
             'user' => $user,
@@ -76,7 +76,7 @@ class JobSeekerController extends Controller
     public function uploadResume(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'resume' => ['required', 'file', 'mimes:pdf,doc,docx', 'max:10240'],
+            'resume' => ['required', 'file', 'mimes:pdf,doc,docx', 'extensions:pdf,doc,docx', 'max:10240'],
         ]);
         if ($validator->fails()) {
             return response()->json(['message' => 'Validation failed', 'errors' => $validator->errors()], 422);
@@ -189,7 +189,11 @@ class JobSeekerController extends Controller
 
     public function applications(Request $request)
     {
-        $applications = Application::with(['job.user:id,company_name', 'candidate:id,parsed_name,extracted_skills_json,status'])
+        $applications = Application::with([
+            'job.user:id,company_name,location',
+            'job:id,user_id,title,department,employment_type,description,required_skills_json,experience_requirements,status',
+            'candidate:id,parsed_name,extracted_skills_json,status,resume_path',
+        ])
             ->where('user_id', $request->user()->id)
             ->latest()
             ->get();
@@ -203,16 +207,69 @@ class JobSeekerController extends Controller
             return response()->json(['message' => 'This job is no longer accepting applications.'], 422);
         }
 
-        $candidate = Candidate::where('user_id', $request->user()->id)
-            ->where('status', 'done')
-            ->latest()
-            ->first();
-        if (!$candidate) {
-            return response()->json(['message' => 'Upload a readable resume before applying.'], 422);
-        }
-
         if (Application::where('user_id', $request->user()->id)->where('job_id', $job->id)->exists()) {
             return response()->json(['message' => 'You have already applied for this job.'], 409);
+        }
+
+        $candidate = null;
+
+        // Check if a new resume was uploaded directly during application
+        if ($request->hasFile('resume')) {
+            $validator = Validator::make($request->all(), [
+                'resume' => ['required', 'file', 'mimes:pdf,doc,docx', 'extensions:pdf,doc,docx', 'max:10240'],
+            ]);
+            if ($validator->fails()) {
+                return response()->json(['message' => 'Validation failed', 'errors' => $validator->errors()], 422);
+            }
+
+            $file = $request->file('resume');
+            $path = $file->store('resumes', 'local');
+
+            try {
+                $text = $this->resumeParser->extractText(Storage::disk('local')->path($path), $file->getClientOriginalExtension());
+                if (trim($text) === '') {
+                    Storage::disk('local')->delete($path);
+                    return response()->json(['message' => 'No readable text was found in the uploaded resume.'], 422);
+                }
+
+                $candidate = Candidate::create([
+                    'user_id' => $request->user()->id,
+                    'resume_path' => $path,
+                    'resume_text' => $text,
+                    'status' => 'done',
+                ]);
+
+                $analysis = $this->matcher->match($text, '', '', []);
+                $skills = $analysis['skills'] ?? [];
+                $candidate->update([
+                    'parsed_name' => $analysis['name'] ?? $request->user()->name,
+                    'parsed_email' => $analysis['email'] ?? $request->user()->email,
+                    'parsed_phone' => $analysis['phone'] ?? null,
+                    'parsed_education_json' => $analysis['education'] ?? [],
+                    'parsed_experience_json' => $analysis['experience'] ?? [],
+                    'extracted_skills_json' => $skills,
+                ]);
+
+                if (!empty($skills)) {
+                    $request->user()->update([
+                        'skills_json' => array_values(array_unique(array_merge($request->user()->skills_json ?? [], $skills))),
+                    ]);
+                }
+            } catch (\Throwable $exception) {
+                Storage::disk('local')->delete($path);
+                report($exception);
+                return response()->json(['message' => 'The uploaded resume could not be processed.'], 422);
+            }
+        } else {
+            // Use existing profile resume
+            $candidate = Candidate::where('user_id', $request->user()->id)
+                ->where('status', 'done')
+                ->latest()
+                ->first();
+
+            if (!$candidate) {
+                return response()->json(['message' => 'No profile resume found. Please upload a resume to apply.'], 422);
+            }
         }
 
         $payload = $this->matcher->match(

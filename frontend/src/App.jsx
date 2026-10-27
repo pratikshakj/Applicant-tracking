@@ -1,14 +1,24 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import JobSeekerDashboard from './JobSeekerDashboard.jsx';
+import { EMPLOYMENT_TYPES, JOB_DEPARTMENTS } from './jobOptions.js';
 import {
-  ArrowDownRight, ArrowRight, BriefcaseBusiness, Check, ChevronDown, CircleHelp,
-  FileText, LayoutDashboard, LogOut, MapPin, Menu, Plus, Search, Settings2, Sparkles,
-  Target, UserRound, Users, X,
+  ArrowDownRight, ArrowRight, BriefcaseBusiness, CalendarDays, Check, ChevronDown, CircleHelp,
+  FileText, LayoutDashboard, LogOut, MapPin, Menu, Plus, Search, Settings2, ShoppingCart, Sparkles,
+  Target, Trash2, UserRound, Users, X,
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 const CONTACT_EMAIL = import.meta.env.VITE_CONTACT_EMAIL || '';
+function interviewCartKey(userId) { return `ats_interview_cart_${userId}`; }
+function readInterviewCart(userId) {
+  try { return JSON.parse(localStorage.getItem(interviewCartKey(userId)) || '[]'); }
+  catch { return []; }
+}
+function writeInterviewCart(userId, applicationIds) {
+  localStorage.setItem(interviewCartKey(userId), JSON.stringify(applicationIds));
+  window.dispatchEvent(new CustomEvent('interview-cart-updated', { detail: { userId } }));
+}
 
 async function api(path, options = {}) {
   const token = sessionStorage.getItem('ats_token');
@@ -198,6 +208,7 @@ const sections = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
   { key: 'jobs', label: 'Job openings', icon: BriefcaseBusiness },
   { key: 'candidates', label: 'Candidates', icon: Users },
+  { key: 'interviews', label: 'Interview cart', icon: ShoppingCart },
   { key: 'screening', label: 'AI screening', icon: Sparkles },
 ];
 
@@ -206,12 +217,20 @@ function Workspace({ user, onSignOut }) {
   const navigate = useNavigate();
   const [active, setActive] = useState('overview');
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [cartCount, setCartCount] = useState(() => readInterviewCart(user.id).length);
   useEffect(() => { const key = location.pathname.split('/')[2]; if (sections.some((section) => section.key === key)) setActive(key); else setActive('overview'); }, [location.pathname]);
+  useEffect(() => {
+    const update = (event) => {
+      if (event.detail?.userId === user.id) setCartCount(readInterviewCart(user.id).length);
+    };
+    window.addEventListener('interview-cart-updated', update);
+    return () => window.removeEventListener('interview-cart-updated', update);
+  }, [user.id]);
   const go = (key) => { setActive(key); navigate(`/workspace/${key}`); setMobileOpen(false); };
   return <div className="workspace">
-    <aside className={`sidebar ${mobileOpen ? 'sidebar-open' : ''}`}><div className="sidebar-brand"><Brand /><button className="icon-button close-menu" onClick={() => setMobileOpen(false)} aria-label="Close menu"><X size={18} /></button></div><div className="workspace-label">WORKSPACE</div><nav className="side-nav">{sections.map(({ key, label, icon: Icon }) => <button key={key} className={`side-link ${active === key ? 'active' : ''}`} onClick={() => go(key)}><Icon size={17} />{label}{key === 'screening' && <span className="side-new">AI</span>}</button>)}</nav><div className="sidebar-bottom"><div className="help-box"><CircleHelp size={17} /><span><b>Need a hand?</b><small>Read the project guide</small></span><ArrowRight size={14} /></div><button className="account-button" onClick={() => go('account')}><span className="user-avatar">{initials(user.name)}</span><span className="account-copy"><b>{user.name}</b><small>{user.company_name || 'Recruiter account'}</small></span><ChevronDown size={15} /></button></div></aside>
+    <aside className={`sidebar ${mobileOpen ? 'sidebar-open' : ''}`}><div className="sidebar-brand"><Brand /><button className="icon-button close-menu" onClick={() => setMobileOpen(false)} aria-label="Close menu"><X size={18} /></button></div><div className="workspace-label">WORKSPACE</div><nav className="side-nav">{sections.map(({ key, label, icon: Icon }) => <button key={key} className={`side-link ${active === key ? 'active' : ''}`} onClick={() => go(key)}><Icon size={17} />{label}{key === 'screening' && <span className="side-new">AI</span>}{key === 'interviews' && cartCount > 0 && <span className="side-new">{cartCount}</span>}</button>)}</nav><div className="sidebar-bottom"><div className="help-box"><CircleHelp size={17} /><span><b>Need a hand?</b><small>Read the project guide</small></span><ArrowRight size={14} /></div><button className="account-button" onClick={() => go('account')}><span className="user-avatar">{initials(user.name)}</span><span className="account-copy"><b>{user.name}</b><small>{user.company_name || 'Recruiter account'}</small></span><ChevronDown size={15} /></button></div></aside>
     <main className="workspace-main"><header className="workspace-top"><button className="icon-button mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu size={20} /></button><span className="breadcrumb">Hiring workspace <span>/</span> {sectionTitle(active)}</span><div className="top-actions"><span className="api-status"><i /> RECRUITER VIEW</span><button onClick={onSignOut} className="signout-button"><LogOut size={16} /><span>Sign out</span></button></div></header>
-      <Routes><Route index element={<Navigate to="overview" replace />} /><Route path="overview" element={<Dashboard user={user} onNavigate={go} />} /><Route path="jobs" element={<Jobs />} /><Route path="candidates" element={<Candidates />} /><Route path="screening" element={<Screening />} /><Route path="account" element={<Account user={user} />} /><Route path="*" element={<Navigate to="overview" replace />} /></Routes>
+      <Routes><Route index element={<Navigate to="overview" replace />} /><Route path="overview" element={<Dashboard user={user} onNavigate={go} />} /><Route path="jobs" element={<Jobs />} /><Route path="candidates" element={<Candidates userId={user.id} />} /><Route path="interviews" element={<InterviewCart userId={user.id} />} /><Route path="screening" element={<Screening />} /><Route path="account" element={<Account user={user} />} /><Route path="*" element={<Navigate to="overview" replace />} /></Routes>
     </main>
   </div>;
 }
@@ -239,39 +258,107 @@ function greeting() { const hour = new Date().getHours(); return hour < 12 ? 'mo
 function Metric({ label, value, detail, icon: Icon, tone }) { return <article className="metric"><div className="metric-top"><span>{label}</span><i className={`metric-icon ${tone}`}><Icon size={17} /></i></div><strong>{value ?? '—'}</strong><small>{detail}</small></article>; }
 
 function Jobs() {
-  const [jobs, setJobs] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [query, setQuery] = useState(''); const [modal, setModal] = useState(null); const [notice, setNotice] = useState('');
+  const [jobs, setJobs] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [query, setQuery] = useState(''); const [department, setDepartment] = useState(''); const [modal, setModal] = useState(null); const [notice, setNotice] = useState('');
   const refresh = () => { setLoading(true); api('/jobs').then((result) => setJobs(result.jobs || [])).catch((e) => setError(e.message)).finally(() => setLoading(false)); };
   useEffect(refresh, []);
-  const visible = jobs.filter((job) => `${job.title} ${(job.required_skills_json || []).join(' ')} ${job.description}`.toLowerCase().includes(query.toLowerCase()));
+  const visible = jobs.filter((job) => (!department || job.department === department) && `${job.title} ${job.department || ''} ${(job.required_skills_json || []).join(' ')} ${job.description}`.toLowerCase().includes(query.toLowerCase()));
   const remove = async (job) => { if (!window.confirm(`Delete “${job.title}”? This cannot be undone.`)) return; try { await api(`/jobs/${job.id}`, { method: 'DELETE' }); setNotice('Job deleted.'); refresh(); } catch (e) { setError(e.message); } };
   const save = async (form) => { await api(modal?.id ? `/jobs/${modal.id}` : '/jobs', { method: modal?.id ? 'PUT' : 'POST', body: JSON.stringify(form) }); setModal(null); setNotice(modal?.id ? 'Job updated.' : 'Job created.'); refresh(); };
   return <div className="page-content"><PageHeader eyebrow="ROLE MANAGEMENT" title="Job openings" description="Write clear briefs, keep requirements current, and manage your active roles." action={<button className="button button-dark" onClick={() => setModal({})}><Plus size={16} /> Create a job</button>} />
-    <div className="toolbar"><label className="search-field"><Search size={17} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search roles or skills" /></label><span className="result-count">{visible.length} {visible.length === 1 ? 'role' : 'roles'}</span></div>
-    {notice && <Notice>{notice}</Notice>}{error && <Notice error>{error}</Notice>}{loading ? <Loading /> : visible.length ? <div className="job-list">{visible.map((job) => <article className="job-row" key={job.id}><span className="job-icon"><BriefcaseBusiness size={18} /></span><div className="job-main"><div className="job-title-line"><h2>{job.title}</h2><span className={`status-pill ${job.status === 'open' ? 'status-open' : 'status-closed'}`}>{job.status}</span></div><p>{job.experience_requirements || 'Experience requirements not specified'}</p><div className="tag-list">{(job.required_skills_json || []).map((skill) => <span className="skill-tag" key={skill}>{skill}</span>)}</div><small className="job-match-count">{job.matches_count ?? 0} matched candidates</small></div><div className="job-actions"><button className="text-action" onClick={() => setModal(job)}>Edit</button><button className="text-action danger-action" onClick={() => remove(job)}>Delete</button></div></article>)}</div> : <EmptyState icon={BriefcaseBusiness} title={query ? 'No roles match that search' : 'Start with your first opening'} copy={query ? 'Try another title or skill.' : 'Create a role to start organizing your hiring workflow.'} action={!query && <button className="button button-dark" onClick={() => setModal({})}><Plus size={16} /> Create a job</button>} />}
+    <div className="toolbar"><label className="search-field"><Search size={17} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search roles or skills" /></label><label className="filter-select"><BriefcaseBusiness size={15} /><select aria-label="Filter by department" value={department} onChange={(event) => setDepartment(event.target.value)}><option value="">All departments</option>{JOB_DEPARTMENTS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><span className="result-count">{visible.length} {visible.length === 1 ? 'role' : 'roles'}</span></div>
+    {notice && <Notice>{notice}</Notice>}{error && <Notice error>{error}</Notice>}{loading ? <Loading /> : visible.length ? <div className="job-list">{visible.map((job) => <article className="job-row" key={job.id}><span className="job-icon"><BriefcaseBusiness size={18} /></span><div className="job-main"><div className="job-title-line"><h2>{job.title}</h2><span className={`status-pill ${job.status === 'open' ? 'status-open' : 'status-closed'}`}>{job.status}</span></div><p>{job.department || 'Other'} · {job.employment_type || 'Full-time'} · {job.experience_requirements || 'Experience requirements not specified'}</p><div className="tag-list">{(job.required_skills_json || []).map((skill) => <span className="skill-tag" key={skill}>{skill}</span>)}</div><small className="job-match-count">{job.matches_count ?? 0} matched candidates</small></div><div className="job-actions"><button className="text-action" onClick={() => setModal(job)}>Edit</button><button className="text-action danger-action" onClick={() => remove(job)}>Delete</button></div></article>)}</div> : <EmptyState icon={BriefcaseBusiness} title={query || department ? 'No roles match those filters' : 'Start with your first opening'} copy={query || department ? 'Try another title, skill, or department.' : 'Create a role to start organizing your hiring workflow.'} action={!query && !department && <button className="button button-dark" onClick={() => setModal({})}><Plus size={16} /> Create a job</button>} />}
     {modal && <JobModal job={modal} onClose={() => setModal(null)} onSave={save} />}
   </div>;
 }
 
 function JobModal({ job, onClose, onSave }) {
-  const [form, setForm] = useState({ title: job.title || '', description: job.description || '', skills: (job.required_skills_json || []).join(', '), experience_requirements: job.experience_requirements || '', status: job.status || 'open' });
+  const [form, setForm] = useState({ title: job.title || '', description: job.description || '', department: job.department || 'Software Engineering', employment_type: job.employment_type || 'Full-time', skills: (job.required_skills_json || []).join(', '), experience_requirements: job.experience_requirements || '', status: job.status || 'open' });
   const [pending, setPending] = useState(false); const [error, setError] = useState('');
-  const submit = async (event) => { event.preventDefault(); setPending(true); setError(''); try { await onSave({ title: form.title, description: form.description, required_skills: form.skills.split(',').map((s) => s.trim()).filter(Boolean), experience_requirements: form.experience_requirements || null, status: form.status }); } catch (e) { setError(e.message); } finally { setPending(false); } };
-  return <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="job-modal-title"><div className="modal-heading"><div><span className="eyebrow">ROLE DETAILS</span><h2 id="job-modal-title">{job.id ? 'Edit job opening' : 'Create job opening'}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={19} /></button></div><form onSubmit={submit}><label>Job title<input required maxLength={255} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Senior product designer" /></label><label>Job description<textarea required rows="5" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe the role and responsibilities" /></label><label>Required skills <span className="field-hint">COMMA SEPARATED</span><input value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} placeholder="Research, Figma, prototyping" /></label><label>Experience requirements<input value={form.experience_requirements} onChange={(e) => setForm({ ...form, experience_requirements: e.target.value })} placeholder="3+ years, product design" /></label><label>Listing status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}><option value="open">Open</option><option value="closed">Closed</option></select></label>{error && <Notice error>{error}</Notice>}<div className="modal-actions"><button type="button" className="button button-quiet" onClick={onClose}>Cancel</button><button disabled={pending} className="button button-dark">{pending ? 'Saving…' : 'Save role'} <ArrowRight size={15} /></button></div></form></section></div>;
+  const submit = async (event) => { event.preventDefault(); setPending(true); setError(''); try { await onSave({ title: form.title, description: form.description, department: form.department, employment_type: form.employment_type, required_skills: form.skills.split(',').map((s) => s.trim()).filter(Boolean), experience_requirements: form.experience_requirements || null, status: form.status }); } catch (e) { setError(e.message); } finally { setPending(false); } };
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="job-modal-title"><div className="modal-heading"><div><span className="eyebrow">ROLE DETAILS</span><h2 id="job-modal-title">{job.id ? 'Edit job opening' : 'Create job opening'}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={19} /></button></div><form onSubmit={submit}><label>Job title<input required maxLength={255} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Senior product designer" /></label><label>Department<select required value={form.department} onChange={(event) => setForm({ ...form, department: event.target.value })}>{JOB_DEPARTMENTS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label>Employment type<select required value={form.employment_type} onChange={(event) => setForm({ ...form, employment_type: event.target.value })}>{EMPLOYMENT_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label>Job description<textarea required rows="5" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe the role and responsibilities" /></label><label>Required skills <span className="field-hint">COMMA SEPARATED</span><input value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} placeholder="Research, Figma, prototyping" /></label><label>Experience requirements<input value={form.experience_requirements} onChange={(e) => setForm({ ...form, experience_requirements: e.target.value })} placeholder="3+ years, product design" /></label><label>Listing status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}><option value="open">Open</option><option value="closed">Closed</option></select></label>{error && <Notice error>{error}</Notice>}<div className="modal-actions"><button type="button" className="button button-quiet" onClick={onClose}>Cancel</button><button disabled={pending} className="button button-dark">{pending ? 'Saving…' : 'Save role'} <ArrowRight size={15} /></button></div></form></section></div>;
 }
 
-function Candidates() {
-  const [candidates, setCandidates] = useState([]); const [meta, setMeta] = useState(null); const [jobs, setJobs] = useState([]); const [search, setSearch] = useState(''); const [status, setStatus] = useState(''); const [jobId, setJobId] = useState(''); const [page, setPage] = useState(1); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [selected, setSelected] = useState(null);
+function Candidates({ userId }) {
+  const [candidates, setCandidates] = useState([]); const [meta, setMeta] = useState(null); const [jobs, setJobs] = useState([]); const [search, setSearch] = useState(''); const [status, setStatus] = useState(''); const [jobId, setJobId] = useState(''); const [page, setPage] = useState(1); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [selected, setSelected] = useState(null);
   useEffect(() => { api('/jobs').then((result) => setJobs(result.jobs || [])).catch((e) => setError(e.message)); }, []);
-  useEffect(() => { const timer = setTimeout(() => { setLoading(true); setError(''); const params = new URLSearchParams({ per_page: '20', page: String(page) }); if (search) params.set('search', search); if (status) params.set('status', status); if (jobId) params.set('job_id', jobId); api(`/candidates?${params}`).then((result) => { setCandidates(result.data || []); setMeta(result); }).catch((e) => setError(e.message)).finally(() => setLoading(false)); }, 250); return () => clearTimeout(timer); }, [search, status, jobId, page]);
+  const refresh = () => { setLoading(true); setError(''); const params = new URLSearchParams({ per_page: '20', page: String(page) }); if (search) params.set('search', search); if (status) params.set('status', status); if (jobId) params.set('job_id', jobId); api(`/candidates?${params}`).then((result) => { setCandidates(result.data || []); setMeta(result); }).catch((e) => setError(e.message)).finally(() => setLoading(false)); };
+  useEffect(() => { const timer = setTimeout(refresh, 250); return () => clearTimeout(timer); }, [search, status, jobId, page]);
+  const deleteCandidate = async (candidate, event) => {
+    if (event) event.stopPropagation();
+    if (!window.confirm(`Delete "${candidate.parsed_name || `Candidate #${candidate.id}`}"? This will permanently remove the candidate, their resume, and all associated applications and matches. This cannot be undone.`)) return;
+    try {
+      await api(`/candidates/${candidate.id}`, { method: 'DELETE' });
+      setNotice('Candidate deleted successfully.');
+      setSelected(null);
+      refresh();
+    } catch (e) { setError(e.message); }
+  };
   return <div className="page-content"><PageHeader eyebrow="TALENT POOL" title="Candidates" description="Review parsed resume details and matching results tied to your workspace." />
     <div className="toolbar"><label className="search-field"><Search size={17} /><input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Search name or email" /></label><label className="filter-select"><Settings2 size={16} /><select value={jobId} onChange={(e) => { setJobId(e.target.value); setPage(1); }}><option value="">All job openings</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.title}</option>)}</select></label><label className="filter-select"><Settings2 size={16} /><select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}><option value="">All applicants</option><option value="applied">Applied</option><option value="shortlisted">Shortlisted</option><option value="interview">Interview</option><option value="rejected">Rejected</option><option value="done">Resume analyzed</option><option value="parsing">Processing</option><option value="failed">Needs attention</option></select></label><span className="result-count">{meta?.total ?? candidates.length} candidates</span></div>
-    {error && <Notice error>{error}</Notice>}{loading ? <Loading /> : candidates.length ? <div className="candidate-table-wrap"><table className="candidate-table"><thead><tr><th>CANDIDATE</th><th>APPLIED ROLE</th><th>EXTRACTED SKILLS</th><th>STATUS</th><th>BEST MATCH</th><th /></tr></thead><tbody>{candidates.map((candidate) => { const application = candidate.applications?.[0]; const displayedStatus = application?.status || candidate.status; const match = candidate.matches?.find((item) => item.job_id === application?.job_id); return <tr key={candidate.id} onClick={() => setSelected(candidate)}><td><div className="candidate-name"><span className="user-avatar avatar-small">{initials(candidate.parsed_name || 'Candidate')}</span><span><b>{candidate.parsed_name || `Candidate #${candidate.id}`}</b><small>{candidate.parsed_email || candidate.parsed_phone || 'Contact not extracted'}</small></span></div></td><td>{application?.job?.title || <span className="muted">Screening only</span>}</td><td><div className="tag-list compact-tags">{(candidate.extracted_skills_json || []).slice(0, 3).map((skill) => <span className="skill-tag" key={skill}>{skill}</span>)}{!candidate.extracted_skills_json?.length && <span className="muted">Not available</span>}</div></td><td><span className={`status-pill ${displayedStatus === 'done' || displayedStatus === 'shortlisted' || displayedStatus === 'interview' ? 'status-open' : displayedStatus === 'failed' || displayedStatus === 'rejected' ? 'status-closed' : 'status-review'}`}>{displayedStatus}</span></td><td><span className="table-score">{match ? `${match.match_percentage}%` : candidate.status === 'done' ? `${candidate.ai_match_percentage ?? 0}%` : '—'}</span></td><td><button className="icon-button" aria-label={`View ${candidate.parsed_name || 'candidate'}`}><ArrowRight size={16} /></button></td></tr>; })}</tbody></table></div> : <EmptyState icon={Users} title="No candidates to review" copy="Applicants and privately uploaded resumes appear here after roles receive applications or resume screening." />}
-    {meta?.last_page > 1 && <div className="pagination-bar"><span>Showing {meta.from || 0}–{meta.to || 0} of {meta.total || 0}</span><div><button className="button button-quiet" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}>Previous</button><span>Page {meta.current_page} of {meta.last_page}</span><button className="button button-quiet" disabled={page >= meta.last_page || loading} onClick={() => setPage(page + 1)}>Next</button></div></div>}{selected && <CandidateModal candidate={selected} onClose={() => setSelected(null)} />}
+    {error && <Notice error>{error}</Notice>}{notice && <Notice>{notice}</Notice>}{loading ? <Loading /> : candidates.length ? <div className="candidate-table-wrap"><table className="candidate-table"><thead><tr><th>CANDIDATE</th><th>APPLIED ROLE</th><th>EXTRACTED SKILLS</th><th>STATUS</th><th>BEST MATCH</th><th /></tr></thead><tbody>{candidates.map((candidate) => { const application = candidate.applications?.[0]; const displayedStatus = application?.status || candidate.status; const match = candidate.matches?.find((item) => item.job_id === application?.job_id); return <tr key={candidate.id} onClick={() => setSelected(candidate)}><td><div className="candidate-name"><span className="user-avatar avatar-small">{initials(candidate.parsed_name || 'Candidate')}</span><span><b>{candidate.parsed_name || `Candidate #${candidate.id}`}</b><small>{candidate.parsed_email || candidate.parsed_phone || 'Contact not extracted'}</small></span></div></td><td>{application?.job?.title || <span className="muted">Screening only</span>}</td><td><div className="tag-list compact-tags">{(candidate.extracted_skills_json || []).slice(0, 3).map((skill) => <span className="skill-tag" key={skill}>{skill}</span>)}{!candidate.extracted_skills_json?.length && <span className="muted">Not available</span>}</div></td><td><span className={`status-pill ${displayedStatus === 'done' || displayedStatus === 'shortlisted' || displayedStatus === 'interview' ? 'status-open' : displayedStatus === 'failed' || displayedStatus === 'rejected' ? 'status-closed' : 'status-review'}`}>{displayedStatus}</span></td><td><span className="table-score">{match ? `${match.match_percentage}%` : candidate.status === 'done' ? `${candidate.ai_match_percentage ?? 0}%` : '—'}</span></td><td>{application?.status === 'shortlisted' && <button className="icon-button" aria-label={`Add ${candidate.parsed_name || 'candidate'} to interview cart`} onClick={(event) => { event.stopPropagation(); const ids = readInterviewCart(userId); if (!ids.includes(application.id)) writeInterviewCart(userId, [...ids, application.id]); }}><ShoppingCart size={15} /></button>}<button className="icon-button danger-icon" aria-label={`Delete ${candidate.parsed_name || 'candidate'}`} title="Delete candidate" onClick={(event) => deleteCandidate(candidate, event)}><Trash2 size={15} /></button><button className="icon-button" aria-label={`View ${candidate.parsed_name || 'candidate'}`}><ArrowRight size={16} /></button></td></tr>; })}</tbody></table></div> : <EmptyState icon={Users} title="No candidates to review" copy="Applicants and privately uploaded resumes appear here after roles receive applications or resume screening." />}
+    {meta?.last_page > 1 && <div className="pagination-bar"><span>Showing {meta.from || 0}–{meta.to || 0} of {meta.total || 0}</span><div><button className="button button-quiet" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}>Previous</button><span>Page {meta.current_page} of {meta.last_page}</span><button className="button button-quiet" disabled={page >= meta.last_page || loading} onClick={() => setPage(page + 1)}>Next</button></div></div>}{selected && <CandidateModal candidate={selected} userId={userId} onClose={() => setSelected(null)} onDelete={deleteCandidate} />}
   </div>;
 }
 
-function CandidateModal({ candidate, onClose }) {
-  const [details, setDetails] = useState(candidate); const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false); const [applicationId, setApplicationId] = useState('');
+function InterviewCart({ userId }) {
+  const [cartIds, setCartIds] = useState(() => readInterviewCart(userId));
+  const [applications, setApplications] = useState([]);
+  const [schedule, setSchedule] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const refresh = () => {
+    setLoading(true);
+    api('/applications?status=shortlisted')
+      .then((result) => setApplications((result.applications || []).filter((item) => cartIds.includes(item.id))))
+      .catch((requestError) => setError(requestError.message))
+      .finally(() => setLoading(false));
+  };
+  useEffect(refresh, [cartIds]);
+  const scheduleAll = async () => {
+    setError('');
+    setNotice('');
+    const missing = applications.filter((item) => !schedule[item.id]?.at);
+    if (missing.length) {
+      setError('Choose an interview date and time for every candidate in the cart.');
+      return;
+    }
+
+    setBusy(true);
+    const results = await Promise.allSettled(applications.map((item) => api(`/applications/${item.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        status: 'interview',
+        interview_at: new Date(schedule[item.id].at).toISOString(),
+        interview_notes: schedule[item.id].notes || null,
+      }),
+    })));
+    const completedIds = applications.filter((item, index) => results[index].status === 'fulfilled').map((item) => item.id);
+    const remaining = cartIds.filter((id) => !completedIds.includes(id));
+    setCartIds(remaining);
+    writeInterviewCart(userId, remaining);
+    if (completedIds.length) setNotice(`${completedIds.length} interview${completedIds.length === 1 ? '' : 's'} scheduled.`);
+    const failures = results.filter((result) => result.status === 'rejected');
+    if (failures.length) setError(`Could not schedule ${failures.length} interview${failures.length === 1 ? '' : 's'}: ${failures.map((result) => result.reason.message).join('; ')}`);
+    setBusy(false);
+  };
+
+  const remove = (id) => {
+    const updated = cartIds.filter((item) => item !== id);
+    setCartIds(updated);
+    writeInterviewCart(userId, updated);
+  };
+
+  return <div className="page-content"><PageHeader eyebrow="RECRUITER WORKFLOW" title="Interview cart" description="Collect approved candidates, choose individual interview times, and schedule them together." action={applications.length > 0 && <button className="button button-dark" disabled={busy} onClick={scheduleAll}><CalendarDays size={16} />{busy ? 'Scheduling…' : `Schedule ${applications.length} interview${applications.length === 1 ? '' : 's'}`}</button>} />
+    {error && <Notice error>{error}</Notice>}{notice && <Notice>{notice}</Notice>}
+    {loading ? <Loading /> : applications.length ? <div className="job-list">{applications.map((item) => <article className="job-row interview-cart-row" key={item.id}><span className="job-icon"><CalendarDays size={18} /></span><div className="job-main"><div className="job-title-line"><h2>{item.candidate?.parsed_name || `Candidate #${item.candidate_id}`}</h2><span className="status-pill status-open">{item.candidate?.ai_match_percentage ?? 0}% match</span></div><p>{item.job?.title} · {item.job?.department || 'Other'}</p><small className="job-match-count">{item.candidate?.parsed_email || 'Email not extracted'}</small><div className="cart-schedule-fields"><label>Interview date and time<input type="datetime-local" value={schedule[item.id]?.at || ''} onChange={(event) => setSchedule({ ...schedule, [item.id]: { ...schedule[item.id], at: event.target.value } })} /></label><label>Meeting details<input value={schedule[item.id]?.notes || ''} onChange={(event) => setSchedule({ ...schedule, [item.id]: { ...schedule[item.id], notes: event.target.value } })} placeholder="Video link or interview notes" /></label></div></div><button className="text-action danger-action" disabled={busy} onClick={() => remove(item.id)}>Remove</button></article>)}</div> : <EmptyState icon={ShoppingCart} title="Your interview cart is empty" copy="Approve a candidate for shortlisting, then add them to the cart from their profile or the candidates list." />}
+  </div>;
+}
+
+function CandidateModal({ candidate, userId, onClose, onDelete }) {
+  const [details, setDetails] = useState(candidate); const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false); const [applicationId, setApplicationId] = useState(''); const [pendingRejection, setPendingRejection] = useState(false); const [inviteOpen, setInviteOpen] = useState(false);
   useEffect(() => { api(`/candidates/${candidate.id}`).then((result) => { setDetails(result.candidate); setApplicationId(String(result.candidate.applications?.[0]?.id || '')); }).catch((e) => setError(e.message)); }, [candidate.id]);
   const application = details.applications?.find((item) => String(item.id) === applicationId);
   const match = details.matches?.find((item) => item.job_id === application?.job_id);
@@ -281,7 +368,9 @@ function CandidateModal({ candidate, onClose }) {
     try {
       const result = await api(`/applications/${application.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
       setDetails({ ...details, applications: details.applications.map((item) => item.id === application.id ? result.application : item) });
-      setNotice('Application updated.');
+      setPendingRejection(false);
+      setInviteOpen(false);
+      setNotice(payload.status === 'rejected' ? 'Rejection saved. The job seeker will see this update in their applications.' : payload.status === 'shortlisted' ? 'Candidate approved for shortlisting. Match score does not restrict your decision.' : payload.status === 'interview' ? 'Interview invitation sent. The scheduled date and time are now visible in the job seeker’s applications.' : 'Application updated.');
     } catch (requestError) { setError(requestError.message); }
     finally { setBusy(false); }
   };
@@ -300,9 +389,77 @@ function CandidateModal({ candidate, onClose }) {
     if (!date) { setError('Choose an interview date and time.'); return; }
     updateApplication({ status: 'interview', interview_at: new Date(date).toISOString(), interview_notes: values.get('interview_notes') || null });
   };
-  return <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}><section className="modal candidate-modal" role="dialog" aria-modal="true" aria-labelledby="candidate-modal-title"><div className="modal-heading"><div><span className="eyebrow">CANDIDATE PROFILE</span><h2 id="candidate-modal-title">{details.parsed_name || `Candidate #${details.id}`}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={19} /></button></div>{error && <Notice error>{error}</Notice>}{notice && <Notice>{notice}</Notice>}<div className="candidate-contact">{details.parsed_email && <span>{details.parsed_email}</span>}{details.parsed_phone && <span>{details.parsed_phone}</span>}<button className="text-action" onClick={downloadResume}><FileText size={14} /> Download resume</button></div>
-    {details.applications?.length > 0 && <section className="detail-section"><h3>Applicant workflow</h3><label className="application-select">Job application<select value={applicationId} onChange={(event) => setApplicationId(event.target.value)}>{details.applications.map((item) => <option key={item.id} value={item.id}>{item.job?.title || `Job #${item.job_id}`}</option>)}</select></label><div className="candidate-score-block"><span>SKILL MATCH FOR THIS ROLE</span><strong>{match ? `${match.match_percentage}%` : 'Not analyzed'}</strong><small>{match?.raw_json?.match_explanation || 'Score is based on overlap with the role’s stated skills; it is decision support only.'}</small></div>{match?.skill_comparison_json && <><div className="detail-section"><h3>Matching skills</h3><div className="tag-list">{(match.skill_comparison_json.matched || []).map((skill) => <span className="skill-tag" key={skill}>{skill}</span>)}{!match.skill_comparison_json.matched?.length && <span className="muted">No required skills matched.</span>}</div></div><div className="detail-section"><h3>Skills not found in resume</h3><div className="tag-list">{(match.skill_comparison_json.missing || []).map((skill) => <span className="skill-tag missing-skill-tag" key={skill}>{skill}</span>)}{!match.skill_comparison_json.missing?.length && <span className="muted">All listed skills matched.</span>}</div></div></>}<div className="candidate-action-row"><span className={`status-pill status-${application?.status === 'rejected' ? 'closed' : application?.status === 'shortlisted' || application?.status === 'interview' ? 'open' : 'review'}`}>{application?.status}</span><button disabled={busy} className="button button-quiet" onClick={() => updateApplication({ status: 'shortlisted' })}>Shortlist</button><button disabled={busy} className="button button-quiet danger-action" onClick={() => updateApplication({ status: 'rejected' })}>Reject</button></div><form className="interview-form" onSubmit={scheduleInterview}><h3>Schedule an interview</h3><label>Date and time<input name="interview_at" type="datetime-local" required /></label><label>Invitation details<textarea name="interview_notes" rows="2" placeholder="Add meeting details or a note for the candidate" /></label><button disabled={busy} className="button button-dark">Send interview invitation <ArrowRight size={14} /></button></form></section>}
-    <div className="candidate-score-block"><span>BEST MATCH SCORE ACROSS ROLES</span><strong>{details.status === 'done' ? `${details.ai_match_percentage ?? 0}%` : 'Not available'}</strong><small>Based on resume skill evidence; never an automatic hiring decision.</small></div><section className="detail-section"><h3>Extracted skills</h3><div className="tag-list">{(details.extracted_skills_json || []).map((skill) => <span className="skill-tag" key={skill}>{skill}</span>)}{!details.extracted_skills_json?.length && <span className="muted">No skills were extracted.</span>}</div></section><section className="detail-section"><h3>Education</h3>{(details.parsed_education_json || []).length ? <ul>{details.parsed_education_json.map((item, index) => <li key={index}>{item.summary || JSON.stringify(item)}</li>)}</ul> : <p className="muted">No education details were returned.</p>}</section><section className="detail-section"><h3>Experience</h3>{(details.parsed_experience_json || []).length ? <ul>{details.parsed_experience_json.map((item, index) => <li key={index}>{item.summary || JSON.stringify(item)}</li>)}</ul> : <p className="muted">No experience details were returned.</p>}</section>{details.error && <Notice error>{details.error}</Notice>}</section></div>;
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className="modal candidate-modal" role="dialog" aria-modal="true" aria-labelledby="candidate-modal-title">
+        <div className="modal-heading">
+          <div><span className="eyebrow">CANDIDATE PROFILE</span><h2 id="candidate-modal-title">{details.parsed_name || `Candidate #${details.id}`}</h2></div>
+          <button className="icon-button" onClick={onClose} aria-label="Close"><X size={19} /></button>
+        </div>
+        {error && <Notice error>{error}</Notice>}
+        {notice && <Notice>{notice}</Notice>}
+        <div className="candidate-contact">
+          {details.parsed_email && <span>{details.parsed_email}</span>}
+          {details.parsed_phone && <span>{details.parsed_phone}</span>}
+          <button className="text-action" onClick={downloadResume}><FileText size={14} /> Download resume</button>
+          <button className="text-action danger-action" onClick={() => onDelete(details)}><Trash2 size={14} /> Delete candidate</button>
+        </div>
+        {details.applications?.length > 0 && (
+          <section className="detail-section">
+            <h3>Applicant workflow</h3>
+            <label className="application-select">Job application
+              <select value={applicationId} onChange={(event) => setApplicationId(event.target.value)}>
+                {details.applications.map((item) => <option key={item.id} value={item.id}>{item.job?.title || `Job #${item.job_id}`}</option>)}
+              </select>
+            </label>
+            <div className="candidate-score-block">
+              <span>SKILL MATCH FOR THIS ROLE</span>
+              <strong>{match ? `${match.match_percentage}%` : 'Not analyzed'}</strong>
+              <small>{match?.raw_json?.match_explanation || 'Match is decision support only. Recruiters can approve any candidate regardless of score.'}</small>
+            </div>
+            {match?.skill_comparison_json && (
+              <>
+                <section className="detail-section">
+                  <h3>Matching skills</h3>
+                  <div className="tag-list">{(match.skill_comparison_json.matched || []).map((skill) => <span className="skill-tag" key={skill}>{skill}</span>)}{!match.skill_comparison_json.matched?.length && <span className="muted">No required skills matched.</span>}</div>
+                </section>
+                <section className="detail-section">
+                  <h3>Skills not found in resume</h3>
+                  <div className="tag-list">{(match.skill_comparison_json.missing || []).map((skill) => <span className="skill-tag missing-skill-tag" key={skill}>{skill}</span>)}{!match.skill_comparison_json.missing?.length && <span className="muted">All listed skills matched.</span>}</div>
+                </section>
+              </>
+            )}
+            <div className="candidate-action-row">
+              <span className={`status-pill status-${application?.status === 'rejected' ? 'closed' : application?.status === 'shortlisted' || application?.status === 'interview' ? 'open' : 'review'}`}>{application?.status}</span>
+              <button disabled={busy || application?.status === 'rejected'} className="button button-quiet" onClick={() => { setPendingRejection(false); setInviteOpen(true); }}>Shortlist & invite</button>
+              <button disabled={busy || application?.status === 'rejected'} className="button button-quiet danger-action" onClick={() => { setInviteOpen(false); setPendingRejection(true); setNotice('Confirm rejection, then save to notify the job seeker.'); }}>Reject</button>
+              {application?.status === 'shortlisted' && <button className="button button-quiet" onClick={() => { const ids = readInterviewCart(userId); if (!ids.includes(application.id)) writeInterviewCart(userId, [...ids, application.id]); setNotice('Candidate added to the interview cart.'); }}><ShoppingCart size={14} /> Add to interview cart</button>}
+            </div>
+            {pendingRejection && <div className="candidate-action-row"><button type="button" className="button button-quiet" disabled={busy} onClick={() => setPendingRejection(false)}>Cancel</button><button type="button" className="button button-dark danger-action" disabled={busy} onClick={() => updateApplication({ status: 'rejected' })}>{busy ? 'Saving…' : 'Save rejection'}</button></div>}
+            {inviteOpen && <form className="interview-form" onSubmit={scheduleInterview}>
+              <h3>Schedule an interview</h3>
+              <label>Date and time<input name="interview_at" type="datetime-local" required /></label>
+              <label>Invitation details<textarea name="interview_notes" rows="2" placeholder="Add meeting details or a note for the candidate" /></label>
+              <div className="candidate-action-row"><button type="button" className="button button-quiet" disabled={busy} onClick={() => updateApplication({ status: 'shortlisted' })}>Save shortlist only</button><button disabled={busy} className="button button-dark"><CalendarDays size={15} />{busy ? 'Sending…' : 'Send interview invite'} <ArrowRight size={14} /></button></div>
+            </form>}
+          </section>
+        )}
+        <section className="detail-section">
+          <h3>Extracted skills</h3>
+          <div className="tag-list">{(details.extracted_skills_json || []).map((skill) => <span className="skill-tag" key={skill}>{skill}</span>)}{!details.extracted_skills_json?.length && <span className="muted">No skills were extracted.</span>}</div>
+        </section>
+        <section className="detail-section">
+          <h3>Education</h3>
+          {(details.parsed_education_json || []).length ? <ul>{details.parsed_education_json.map((item, index) => <li key={index}>{item.summary || JSON.stringify(item)}</li>)}</ul> : <p className="muted">No education details were returned.</p>}
+        </section>
+        <section className="detail-section">
+          <h3>Experience</h3>
+          {(details.parsed_experience_json || []).length ? <ul>{details.parsed_experience_json.map((item, index) => <li key={index}>{item.summary || JSON.stringify(item)}</li>)}</ul> : <p className="muted">No experience details were returned.</p>}
+        </section>
+        {details.error && <Notice error>{details.error}</Notice>}
+      </section>
+    </div>
+  );
 }
 
 function Screening() {

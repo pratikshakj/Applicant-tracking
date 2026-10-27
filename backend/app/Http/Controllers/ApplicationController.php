@@ -14,7 +14,7 @@ class ApplicationController extends Controller
     {
         $query = Application::with([
             'candidate:id,user_id,resume_path,status,parsed_name,parsed_email,parsed_phone,extracted_skills_json,parsed_education_json,parsed_experience_json,ai_match_percentage,hr_notes',
-            'job:id,user_id,title,description,required_skills_json,status',
+            'job:id,user_id,title,department,employment_type,description,required_skills_json,status',
         ])->whereHas('job', fn ($jobs) => $jobs->where('user_id', $request->user()->id));
 
         if ($jobId = $request->query('job_id')) {
@@ -33,14 +33,19 @@ class ApplicationController extends Controller
 
         $validator = Validator::make($request->all(), [
             'status' => ['sometimes', 'required', 'in:applied,shortlisted,rejected,interview'],
-            'interview_at' => ['nullable', 'date', 'after:now'],
+            'interview_at' => ['required_if:status,interview', 'nullable', 'date', 'after:now'],
             'interview_notes' => ['nullable', 'string', 'max:3000'],
         ]);
         if ($validator->fails()) {
             return response()->json(['message' => 'Validation failed', 'errors' => $validator->errors()], 422);
         }
 
-        $application->update($validator->validated());
+        $updates = $validator->validated();
+        if (($updates['status'] ?? null) === 'rejected') {
+            $updates['interview_at'] = null;
+            $updates['interview_notes'] = null;
+        }
+        $application->update($updates);
 
         return response()->json(['application' => $application->fresh()->load(['candidate', 'job'])]);
     }

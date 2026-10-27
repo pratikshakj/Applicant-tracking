@@ -115,4 +115,25 @@ class RoleAuthenticationTest extends TestCase
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.title', 'Open Designer Role');
     }
+
+    public function test_recruiter_can_create_and_filter_jobs_by_department(): void
+    {
+        $recruiter = User::factory()->create(['role' => 'hr']);
+
+        $this->actingAs($recruiter)->postJson('/api/jobs', [
+            'title' => 'Finance Intern',
+            'description' => 'Support the finance team with reconciliations and reporting.',
+            'department' => 'Finance',
+            'employment_type' => 'Internship',
+            'required_skills' => ['Excel', 'Accounting'],
+            'experience_requirements' => 'Entry level',
+        ])->assertCreated()
+            ->assertJsonPath('job.department', 'Finance')
+            ->assertJsonPath('job.employment_type', 'Internship');
+
+        $this->getJson('/api/public/jobs?department=Finance')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.title', 'Finance Intern');
+    }
 }

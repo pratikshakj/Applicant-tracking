@@ -26,7 +26,7 @@ class ResumeController extends Controller
     public function upload(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'resume' => ['required', 'file', 'mimes:pdf,doc,docx', 'max:10240'],
+            'resume' => ['required', 'file', 'mimes:pdf,doc,docx', 'extensions:pdf,doc,docx', 'max:10240'],
             'job_id' => ['nullable', 'exists:jobs,id'],
         ]);
 
