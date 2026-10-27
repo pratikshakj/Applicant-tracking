@@ -12,14 +12,27 @@ class Application extends Model
         'candidate_id',
         'job_id',
         'status',
+        'shortlisted_at',
         'notes',
         'interview_at',
         'interview_notes',
+        'joining_date',
+        'joining_location',
+        'offer_letter_text',
+        'offer_accepted_at',
+        'offer_declined_at',
+        'offer_decline_reason',
     ];
 
     protected function casts(): array
     {
-        return ['interview_at' => 'datetime'];
+        return [
+            'shortlisted_at' => 'datetime',
+            'interview_at' => 'datetime',
+            'joining_date' => 'date',
+            'offer_accepted_at' => 'datetime',
+            'offer_declined_at' => 'datetime',
+        ];
     }
 
     public function candidate(): BelongsTo

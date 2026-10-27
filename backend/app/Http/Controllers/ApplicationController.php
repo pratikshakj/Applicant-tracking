@@ -32,15 +32,21 @@ class ApplicationController extends Controller
         abort_unless($application->job()->where('user_id', $request->user()->id)->exists(), 403);
 
         $validator = Validator::make($request->all(), [
-            'status' => ['sometimes', 'required', 'in:applied,shortlisted,rejected,interview'],
-            'interview_at' => ['required_if:status,interview', 'nullable', 'date', 'after:now'],
+            'status' => ['sometimes', 'required', 'in:applied,shortlisted,interview,cleared,rejected'],
+            'interview_at' => ['required_if:status,interview', 'nullable', 'date'],
             'interview_notes' => ['nullable', 'string', 'max:3000'],
+            'joining_date' => ['nullable', 'date'],
+            'joining_location' => ['nullable', 'string', 'max:255'],
+            'offer_letter_text' => ['nullable', 'string', 'max:20000'],
         ]);
         if ($validator->fails()) {
             return response()->json(['message' => 'Validation failed', 'errors' => $validator->errors()], 422);
         }
 
         $updates = $validator->validated();
+        if (in_array($updates['status'] ?? null, ['shortlisted', 'interview', 'cleared'], true) && !$application->shortlisted_at) {
+            $updates['shortlisted_at'] = now();
+        }
         if (($updates['status'] ?? null) === 'rejected') {
             $updates['interview_at'] = null;
             $updates['interview_notes'] = null;

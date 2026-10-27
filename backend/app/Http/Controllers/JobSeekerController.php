@@ -300,6 +300,57 @@ class JobSeekerController extends Controller
         ], 201);
     }
 
+    public function acceptOffer(Request $request, Application $application)
+    {
+        abort_unless($application->user_id === $request->user()->id, 403);
+
+        if ($application->status !== 'cleared') {
+            return response()->json(['message' => 'This application is not in cleared status.'], 422);
+        }
+
+        if ($application->offer_accepted_at) {
+            return response()->json(['message' => 'Offer letter has already been accepted.'], 422);
+        }
+
+        if ($application->offer_declined_at) {
+            return response()->json(['message' => 'Offer letter was previously declined.'], 422);
+        }
+
+        $application->update([
+            'offer_accepted_at' => now(),
+            'offer_declined_at' => null,
+            'offer_decline_reason' => null,
+        ]);
+
+        return response()->json([
+            'message' => 'Congratulations! You have accepted the offer letter.',
+            'application' => $application->fresh()->load(['job.user:id,company_name', 'candidate:id,parsed_name']),
+        ]);
+    }
+
+    public function rejectOffer(Request $request, Application $application)
+    {
+        abort_unless($application->user_id === $request->user()->id, 403);
+
+        if ($application->status !== 'cleared') {
+            return response()->json(['message' => 'This application does not have an active offer to reject.'], 422);
+        }
+
+        if ($application->offer_accepted_at) {
+            return response()->json(['message' => 'Offer letter has already been accepted and cannot be rejected.'], 422);
+        }
+
+        $application->update([
+            'offer_declined_at' => now(),
+            'offer_decline_reason' => $request->input('reason', 'Candidate declined offer terms.'),
+        ]);
+
+        return response()->json([
+            'message' => 'You have declined the offer letter.',
+            'application' => $application->fresh()->load(['job.user:id,company_name', 'candidate:id,parsed_name']),
+        ]);
+    }
+
     public function downloadResume(Request $request, Candidate $candidate)
     {
         abort_unless($candidate->user_id === $request->user()->id, 403);

@@ -29,6 +29,8 @@ Route::middleware(['auth:sanctum', 'role:job_seeker,candidate'])->prefix('user')
     Route::get('/resumes/{candidate}/download', [JobSeekerController::class, 'downloadResume']);
     Route::get('/recommendations', [JobSeekerController::class, 'recommendations']);
     Route::get('/applications', [JobSeekerController::class, 'applications']);
+    Route::post('/applications/{application}/accept-offer', [JobSeekerController::class, 'acceptOffer']);
+    Route::post('/applications/{application}/reject-offer', [JobSeekerController::class, 'rejectOffer']);
     Route::post('/jobs/{job}/apply', [JobSeekerController::class, 'apply']);
 });
 

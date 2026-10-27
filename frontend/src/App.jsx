@@ -4,7 +4,7 @@ import JobSeekerDashboard from './JobSeekerDashboard.jsx';
 import { EMPLOYMENT_TYPES, JOB_DEPARTMENTS } from './jobOptions.js';
 import {
   ArrowDownRight, ArrowRight, BriefcaseBusiness, CalendarDays, Check, ChevronDown, CircleHelp,
-  FileText, LayoutDashboard, LogOut, MapPin, Menu, Plus, Search, Settings2, ShoppingCart, Sparkles,
+  FileText, LayoutDashboard, LogOut, Mail, MapPin, Menu, Plus, Search, Settings2, ShoppingCart, Sparkles,
   Target, Trash2, UserRound, Users, X,
 } from 'lucide-react';
 
@@ -208,7 +208,7 @@ const sections = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
   { key: 'jobs', label: 'Job openings', icon: BriefcaseBusiness },
   { key: 'candidates', label: 'Candidates', icon: Users },
-  { key: 'interviews', label: 'Interview cart', icon: ShoppingCart },
+  { key: 'interviews', label: 'Interview invite', icon: Mail },
   { key: 'screening', label: 'AI screening', icon: Sparkles },
 ];
 
@@ -228,7 +228,7 @@ function Workspace({ user, onSignOut }) {
   }, [user.id]);
   const go = (key) => { setActive(key); navigate(`/workspace/${key}`); setMobileOpen(false); };
   return <div className="workspace">
-    <aside className={`sidebar ${mobileOpen ? 'sidebar-open' : ''}`}><div className="sidebar-brand"><Brand /><button className="icon-button close-menu" onClick={() => setMobileOpen(false)} aria-label="Close menu"><X size={18} /></button></div><div className="workspace-label">WORKSPACE</div><nav className="side-nav">{sections.map(({ key, label, icon: Icon }) => <button key={key} className={`side-link ${active === key ? 'active' : ''}`} onClick={() => go(key)}><Icon size={17} />{label}{key === 'screening' && <span className="side-new">AI</span>}{key === 'interviews' && cartCount > 0 && <span className="side-new">{cartCount}</span>}</button>)}</nav><div className="sidebar-bottom"><div className="help-box"><CircleHelp size={17} /><span><b>Need a hand?</b><small>Read the project guide</small></span><ArrowRight size={14} /></div><button className="account-button" onClick={() => go('account')}><span className="user-avatar">{initials(user.name)}</span><span className="account-copy"><b>{user.name}</b><small>{user.company_name || 'Recruiter account'}</small></span><ChevronDown size={15} /></button></div></aside>
+    <aside className={`sidebar ${mobileOpen ? 'sidebar-open' : ''}`}><div className="sidebar-brand"><Brand /><button className="icon-button close-menu" onClick={() => setMobileOpen(false)} aria-label="Close menu"><X size={18} /></button></div><div className="workspace-label">WORKSPACE</div><nav className="side-nav">{sections.map(({ key, label, icon: Icon }) => <button key={key} className={`side-link ${active === key ? 'active' : ''}`} onClick={() => go(key)}><Icon size={17} />{label}{key === 'screening' && <span className="side-new">AI</span>}{key === 'interviews' && cartCount > 0 && <span className="side-new">{cartCount}</span>}</button>)}</nav><div className="sidebar-bottom"><button className="account-button" onClick={() => go('account')}><span className="user-avatar">{initials(user.name)}</span><span className="account-copy"><b>{user.name}</b><small>{user.company_name || 'Recruiter account'}</small></span><ChevronDown size={15} /></button></div></aside>
     <main className="workspace-main"><header className="workspace-top"><button className="icon-button mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu size={20} /></button><span className="breadcrumb">Hiring workspace <span>/</span> {sectionTitle(active)}</span><div className="top-actions"><span className="api-status"><i /> RECRUITER VIEW</span><button onClick={onSignOut} className="signout-button"><LogOut size={16} /><span>Sign out</span></button></div></header>
       <Routes><Route index element={<Navigate to="overview" replace />} /><Route path="overview" element={<Dashboard user={user} onNavigate={go} />} /><Route path="jobs" element={<Jobs />} /><Route path="candidates" element={<Candidates userId={user.id} />} /><Route path="interviews" element={<InterviewCart userId={user.id} />} /><Route path="screening" element={<Screening />} /><Route path="account" element={<Account user={user} />} /><Route path="*" element={<Navigate to="overview" replace />} /></Routes>
     </main>
@@ -294,8 +294,8 @@ function Candidates({ userId }) {
     } catch (e) { setError(e.message); }
   };
   return <div className="page-content"><PageHeader eyebrow="TALENT POOL" title="Candidates" description="Review parsed resume details and matching results tied to your workspace." />
-    <div className="toolbar"><label className="search-field"><Search size={17} /><input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Search name or email" /></label><label className="filter-select"><Settings2 size={16} /><select value={jobId} onChange={(e) => { setJobId(e.target.value); setPage(1); }}><option value="">All job openings</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.title}</option>)}</select></label><label className="filter-select"><Settings2 size={16} /><select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}><option value="">All applicants</option><option value="applied">Applied</option><option value="shortlisted">Shortlisted</option><option value="interview">Interview</option><option value="rejected">Rejected</option><option value="done">Resume analyzed</option><option value="parsing">Processing</option><option value="failed">Needs attention</option></select></label><span className="result-count">{meta?.total ?? candidates.length} candidates</span></div>
-    {error && <Notice error>{error}</Notice>}{notice && <Notice>{notice}</Notice>}{loading ? <Loading /> : candidates.length ? <div className="candidate-table-wrap"><table className="candidate-table"><thead><tr><th>CANDIDATE</th><th>APPLIED ROLE</th><th>EXTRACTED SKILLS</th><th>STATUS</th><th>BEST MATCH</th><th /></tr></thead><tbody>{candidates.map((candidate) => { const application = candidate.applications?.[0]; const displayedStatus = application?.status || candidate.status; const match = candidate.matches?.find((item) => item.job_id === application?.job_id); return <tr key={candidate.id} onClick={() => setSelected(candidate)}><td><div className="candidate-name"><span className="user-avatar avatar-small">{initials(candidate.parsed_name || 'Candidate')}</span><span><b>{candidate.parsed_name || `Candidate #${candidate.id}`}</b><small>{candidate.parsed_email || candidate.parsed_phone || 'Contact not extracted'}</small></span></div></td><td>{application?.job?.title || <span className="muted">Screening only</span>}</td><td><div className="tag-list compact-tags">{(candidate.extracted_skills_json || []).slice(0, 3).map((skill) => <span className="skill-tag" key={skill}>{skill}</span>)}{!candidate.extracted_skills_json?.length && <span className="muted">Not available</span>}</div></td><td><span className={`status-pill ${displayedStatus === 'done' || displayedStatus === 'shortlisted' || displayedStatus === 'interview' ? 'status-open' : displayedStatus === 'failed' || displayedStatus === 'rejected' ? 'status-closed' : 'status-review'}`}>{displayedStatus}</span></td><td><span className="table-score">{match ? `${match.match_percentage}%` : candidate.status === 'done' ? `${candidate.ai_match_percentage ?? 0}%` : '—'}</span></td><td>{application?.status === 'shortlisted' && <button className="icon-button" aria-label={`Add ${candidate.parsed_name || 'candidate'} to interview cart`} onClick={(event) => { event.stopPropagation(); const ids = readInterviewCart(userId); if (!ids.includes(application.id)) writeInterviewCart(userId, [...ids, application.id]); }}><ShoppingCart size={15} /></button>}<button className="icon-button danger-icon" aria-label={`Delete ${candidate.parsed_name || 'candidate'}`} title="Delete candidate" onClick={(event) => deleteCandidate(candidate, event)}><Trash2 size={15} /></button><button className="icon-button" aria-label={`View ${candidate.parsed_name || 'candidate'}`}><ArrowRight size={16} /></button></td></tr>; })}</tbody></table></div> : <EmptyState icon={Users} title="No candidates to review" copy="Applicants and privately uploaded resumes appear here after roles receive applications or resume screening." />}
+    <div className="toolbar"><label className="search-field"><Search size={17} /><input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Search name or email" /></label><label className="filter-select"><Settings2 size={16} /><select value={jobId} onChange={(e) => { setJobId(e.target.value); setPage(1); }}><option value="">All job openings</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.title}</option>)}</select></label><label className="filter-select"><Settings2 size={16} /><select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}><option value="">All applicants</option><option value="applied">Applied</option><option value="shortlisted">Shortlisted</option><option value="interview">Interview</option><option value="cleared">Interview Cleared</option><option value="rejected">Rejected</option><option value="done">Resume analyzed</option><option value="parsing">Processing</option><option value="failed">Needs attention</option></select></label><span className="result-count">{meta?.total ?? candidates.length} candidates</span></div>
+    {error && <Notice error>{error}</Notice>}{notice && <Notice>{notice}</Notice>}{loading ? <Loading /> : candidates.length ? <div className="candidate-table-wrap"><table className="candidate-table"><thead><tr><th>CANDIDATE</th><th>APPLIED ROLE</th><th>EXTRACTED SKILLS</th><th>STATUS</th><th>BEST MATCH</th><th /></tr></thead><tbody>{candidates.map((candidate) => { const application = candidate.applications?.[0]; const displayedStatus = application?.status || candidate.status; const match = candidate.matches?.find((item) => item.job_id === application?.job_id); return <tr key={candidate.id} onClick={() => setSelected(candidate)}><td><div className="candidate-name"><span className="user-avatar avatar-small">{initials(candidate.parsed_name || 'Candidate')}</span><span><b>{candidate.parsed_name || `Candidate #${candidate.id}`}</b><small>{candidate.parsed_email || candidate.parsed_phone || 'Contact not extracted'}</small></span></div></td><td>{application?.job?.title || <span className="muted">Screening only</span>}</td><td><div className="tag-list compact-tags">{(candidate.extracted_skills_json || []).slice(0, 3).map((skill) => <span className="skill-tag" key={skill}>{skill}</span>)}{!candidate.extracted_skills_json?.length && <span className="muted">Not available</span>}</div></td><td><span className={`status-pill ${displayedStatus === 'cleared' || displayedStatus === 'done' || displayedStatus === 'shortlisted' || displayedStatus === 'interview' ? 'status-open' : displayedStatus === 'failed' || displayedStatus === 'rejected' ? 'status-closed' : 'status-review'}`}>{displayedStatus === 'cleared' ? 'Cleared' : displayedStatus}</span></td><td><span className="table-score">{match ? `${match.match_percentage}%` : candidate.status === 'done' ? `${candidate.ai_match_percentage ?? 0}%` : '—'}</span></td><td>{application?.status === 'shortlisted' && <button className="icon-button" aria-label={`Queue ${candidate.parsed_name || 'candidate'} for interview invite`} title="Queue for interview invite" onClick={(event) => { event.stopPropagation(); const ids = readInterviewCart(userId); if (!ids.includes(application.id)) writeInterviewCart(userId, [...ids, application.id]); }}><Mail size={15} /></button>}<button className="icon-button danger-icon" aria-label={`Delete ${candidate.parsed_name || 'candidate'}`} title="Delete candidate" onClick={(event) => deleteCandidate(candidate, event)}><Trash2 size={15} /></button><button className="icon-button" aria-label={`View ${candidate.parsed_name || 'candidate'}`}><ArrowRight size={16} /></button></td></tr>; })}</tbody></table></div> : <EmptyState icon={Users} title="No candidates to review" copy="Applicants and privately uploaded resumes appear here after roles receive applications or resume screening." />}
     {meta?.last_page > 1 && <div className="pagination-bar"><span>Showing {meta.from || 0}–{meta.to || 0} of {meta.total || 0}</span><div><button className="button button-quiet" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}>Previous</button><span>Page {meta.current_page} of {meta.last_page}</span><button className="button button-quiet" disabled={page >= meta.last_page || loading} onClick={() => setPage(page + 1)}>Next</button></div></div>}{selected && <CandidateModal candidate={selected} userId={userId} onClose={() => setSelected(null)} onDelete={deleteCandidate} />}
   </div>;
 }
@@ -351,15 +351,30 @@ function InterviewCart({ userId }) {
     writeInterviewCart(userId, updated);
   };
 
-  return <div className="page-content"><PageHeader eyebrow="RECRUITER WORKFLOW" title="Interview cart" description="Collect approved candidates, choose individual interview times, and schedule them together." action={applications.length > 0 && <button className="button button-dark" disabled={busy} onClick={scheduleAll}><CalendarDays size={16} />{busy ? 'Scheduling…' : `Schedule ${applications.length} interview${applications.length === 1 ? '' : 's'}`}</button>} />
+  return <div className="page-content"><PageHeader eyebrow="RECRUITER WORKFLOW" title="Interview invite" description="Collect approved candidates, choose individual interview times, and send out invitations together." action={applications.length > 0 && <button className="button button-dark" disabled={busy} onClick={scheduleAll}><CalendarDays size={16} />{busy ? 'Sending invites…' : `Send ${applications.length} interview invite${applications.length === 1 ? '' : 's'}`}</button>} />
     {error && <Notice error>{error}</Notice>}{notice && <Notice>{notice}</Notice>}
-    {loading ? <Loading /> : applications.length ? <div className="job-list">{applications.map((item) => <article className="job-row interview-cart-row" key={item.id}><span className="job-icon"><CalendarDays size={18} /></span><div className="job-main"><div className="job-title-line"><h2>{item.candidate?.parsed_name || `Candidate #${item.candidate_id}`}</h2><span className="status-pill status-open">{item.candidate?.ai_match_percentage ?? 0}% match</span></div><p>{item.job?.title} · {item.job?.department || 'Other'}</p><small className="job-match-count">{item.candidate?.parsed_email || 'Email not extracted'}</small><div className="cart-schedule-fields"><label>Interview date and time<input type="datetime-local" value={schedule[item.id]?.at || ''} onChange={(event) => setSchedule({ ...schedule, [item.id]: { ...schedule[item.id], at: event.target.value } })} /></label><label>Meeting details<input value={schedule[item.id]?.notes || ''} onChange={(event) => setSchedule({ ...schedule, [item.id]: { ...schedule[item.id], notes: event.target.value } })} placeholder="Video link or interview notes" /></label></div></div><button className="text-action danger-action" disabled={busy} onClick={() => remove(item.id)}>Remove</button></article>)}</div> : <EmptyState icon={ShoppingCart} title="Your interview cart is empty" copy="Approve a candidate for shortlisting, then add them to the cart from their profile or the candidates list." />}
+    {loading ? <Loading /> : applications.length ? <div className="job-list">{applications.map((item) => <article className="job-row interview-cart-row" key={item.id}><span className="job-icon"><CalendarDays size={18} /></span><div className="job-main"><div className="job-title-line"><h2>{item.candidate?.parsed_name || `Candidate #${item.candidate_id}`}</h2><span className="status-pill status-open">{item.candidate?.ai_match_percentage ?? 0}% match</span></div><p>{item.job?.title} · {item.job?.department || 'Other'}</p><small className="job-match-count">{item.candidate?.parsed_email || 'Email not extracted'}</small><div className="cart-schedule-fields"><label>Interview date and time<input type="datetime-local" value={schedule[item.id]?.at || ''} onChange={(event) => setSchedule({ ...schedule, [item.id]: { ...schedule[item.id], at: event.target.value } })} /></label><label>Meeting details<input value={schedule[item.id]?.notes || ''} onChange={(event) => setSchedule({ ...schedule, [item.id]: { ...schedule[item.id], notes: event.target.value } })} placeholder="Video link or interview notes" /></label></div></div><button className="text-action danger-action" disabled={busy} onClick={() => remove(item.id)}>Remove</button></article>)}</div> : <EmptyState icon={Mail} title="No candidates queued for interview invite" copy="Shortlist candidates from the Candidates tab or their profile to queue them here for batch interview invites." />}
   </div>;
 }
 
 function CandidateModal({ candidate, userId, onClose, onDelete }) {
   const [details, setDetails] = useState(candidate); const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false); const [applicationId, setApplicationId] = useState(''); const [pendingRejection, setPendingRejection] = useState(false); const [inviteOpen, setInviteOpen] = useState(false);
-  useEffect(() => { api(`/candidates/${candidate.id}`).then((result) => { setDetails(result.candidate); setApplicationId(String(result.candidate.applications?.[0]?.id || '')); }).catch((e) => setError(e.message)); }, [candidate.id]);
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [offerForm, setOfferForm] = useState({ joining_date: '', joining_location: '', offer_letter_text: '' });
+  useEffect(() => {
+    api(`/candidates/${candidate.id}`).then((result) => {
+      setDetails(result.candidate);
+      const firstApp = result.candidate.applications?.[0];
+      setApplicationId(String(firstApp?.id || ''));
+      if (firstApp) {
+        setOfferForm({
+          joining_date: firstApp.joining_date ? firstApp.joining_date.substring(0, 10) : '',
+          joining_location: firstApp.joining_location || '',
+          offer_letter_text: firstApp.offer_letter_text || '',
+        });
+      }
+    }).catch((e) => setError(e.message));
+  }, [candidate.id]);
   const application = details.applications?.find((item) => String(item.id) === applicationId);
   const match = details.matches?.find((item) => item.job_id === application?.job_id);
   const updateApplication = async (payload) => {
@@ -370,7 +385,14 @@ function CandidateModal({ candidate, userId, onClose, onDelete }) {
       setDetails({ ...details, applications: details.applications.map((item) => item.id === application.id ? result.application : item) });
       setPendingRejection(false);
       setInviteOpen(false);
-      setNotice(payload.status === 'rejected' ? 'Rejection saved. The job seeker will see this update in their applications.' : payload.status === 'shortlisted' ? 'Candidate approved for shortlisting. Match score does not restrict your decision.' : payload.status === 'interview' ? 'Interview invitation sent. The scheduled date and time are now visible in the job seeker’s applications.' : 'Application updated.');
+      setOfferOpen(false);
+      setNotice(
+        payload.status === 'rejected' ? 'Candidate marked as rejected/interview not cleared.' :
+        payload.status === 'cleared' ? 'Interview cleared! Offer letter & joining details released to candidate.' :
+        payload.status === 'shortlisted' ? 'Candidate approved for shortlisting.' :
+        payload.status === 'interview' ? 'Interview invitation sent.' :
+        'Application updated.'
+      );
     } catch (requestError) { setError(requestError.message); }
     finally { setBusy(false); }
   };
@@ -430,11 +452,89 @@ function CandidateModal({ candidate, userId, onClose, onDelete }) {
               </>
             )}
             <div className="candidate-action-row">
-              <span className={`status-pill status-${application?.status === 'rejected' ? 'closed' : application?.status === 'shortlisted' || application?.status === 'interview' ? 'open' : 'review'}`}>{application?.status}</span>
-              <button disabled={busy || application?.status === 'rejected'} className="button button-quiet" onClick={() => { setPendingRejection(false); setInviteOpen(true); }}>Shortlist & invite</button>
-              <button disabled={busy || application?.status === 'rejected'} className="button button-quiet danger-action" onClick={() => { setInviteOpen(false); setPendingRejection(true); setNotice('Confirm rejection, then save to notify the job seeker.'); }}>Reject</button>
-              {application?.status === 'shortlisted' && <button className="button button-quiet" onClick={() => { const ids = readInterviewCart(userId); if (!ids.includes(application.id)) writeInterviewCart(userId, [...ids, application.id]); setNotice('Candidate added to the interview cart.'); }}><ShoppingCart size={14} /> Add to interview cart</button>}
+              <span className={`status-pill status-${application?.status === 'rejected' ? 'closed' : application?.status === 'cleared' ? 'open' : application?.status === 'shortlisted' || application?.status === 'interview' ? 'open' : 'review'}`}>
+                {application?.status === 'cleared' ? '✓ Interview cleared' : application?.status === 'rejected' ? '✕ Rejected' : application?.status}
+              </span>
+              <button disabled={busy} className="button button-quiet" onClick={() => { setPendingRejection(false); setOfferOpen(false); setInviteOpen(true); }}>Schedule interview</button>
+              <button disabled={busy} className="button button-quiet" style={{ color: '#6d28d9', borderColor: '#c4b5fd' }} onClick={() => { setPendingRejection(false); setInviteOpen(false); setOfferOpen(true); }}>
+                🎉 Interview Cleared (Offer & Joining)
+              </button>
+              <button disabled={busy || application?.status === 'rejected'} className="button button-quiet danger-action" onClick={() => { setInviteOpen(false); setOfferOpen(false); setPendingRejection(true); setNotice('Confirm rejection, then save to notify the job seeker.'); }}>
+                Reject candidate
+              </button>
+              {application?.status === 'shortlisted' && <button className="button button-quiet" onClick={() => { const ids = readInterviewCart(userId); if (!ids.includes(application.id)) writeInterviewCart(userId, [...ids, application.id]); setNotice('Candidate queued for interview invite.'); }}><Mail size={14} /> Add to interview invite</button>}
             </div>
+
+            {application?.status === 'cleared' && (
+              <div className="cleared-summary-box" style={{ margin: '14px 0', padding: '12px 14px', borderRadius: '6px', background: '#f5f0fb', border: '1px solid #e9d5ff' }}>
+                <b style={{ color: '#5b21b6', fontSize: '11px', display: 'block', marginBottom: '4px' }}>✓ Candidate Interview Cleared</b>
+                <small style={{ color: '#6b5585', fontSize: '9px', display: 'block' }}>
+                  Joining date: <b>{application.joining_date ? new Date(application.joining_date).toLocaleDateString() : 'Not set'}</b> · Location: <b>{application.joining_location || 'Not set'}</b>
+                </small>
+                {application.offer_accepted_at ? (
+                  <span style={{ display: 'inline-block', marginTop: '6px', padding: '2px 8px', borderRadius: '4px', background: '#dcfce7', color: '#166534', fontSize: '9px', fontWeight: 'bold' }}>
+                    ✓ Offer Accepted on {new Date(application.offer_accepted_at).toLocaleString()}
+                  </span>
+                ) : application.offer_declined_at ? (
+                  <span style={{ display: 'inline-block', marginTop: '6px', padding: '2px 8px', borderRadius: '4px', background: '#fee2e2', color: '#991b1b', fontSize: '9px', fontWeight: 'bold' }}>
+                    ✕ Offer Declined by Candidate ({new Date(application.offer_declined_at).toLocaleString()})
+                  </span>
+                ) : (
+                  <span style={{ display: 'inline-block', marginTop: '6px', padding: '2px 8px', borderRadius: '4px', background: '#fef3c7', color: '#92400e', fontSize: '9px', fontWeight: 'bold' }}>
+                    Awaiting Candidate Offer Response
+                  </span>
+                )}
+              </div>
+            )}
+
+            {offerOpen && (
+              <form className="interview-form" onSubmit={(e) => {
+                e.preventDefault();
+                updateApplication({
+                  status: 'cleared',
+                  joining_date: offerForm.joining_date || null,
+                  joining_location: offerForm.joining_location || null,
+                  offer_letter_text: offerForm.offer_letter_text || null,
+                });
+              }}>
+                <h3 style={{ color: '#6d28d9' }}>Release Offer & Joining Details (Interview Cleared)</h3>
+                <label>
+                  Joining date
+                  <input
+                    type="date"
+                    required
+                    value={offerForm.joining_date}
+                    onChange={(e) => setOfferForm({ ...offerForm, joining_date: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Joining location / Work mode
+                  <input
+                    placeholder="e.g. Bangalore Campus / Remote / Hybrid"
+                    required
+                    value={offerForm.joining_location}
+                    onChange={(e) => setOfferForm({ ...offerForm, joining_location: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Offer letter text & salary / compensation terms
+                  <textarea
+                    rows="5"
+                    required
+                    placeholder="We are thrilled to extend an offer for the position of Senior Developer at HireFlow. Your compensation will be $90,000 / year..."
+                    value={offerForm.offer_letter_text}
+                    onChange={(e) => setOfferForm({ ...offerForm, offer_letter_text: e.target.value })}
+                  />
+                </label>
+                <div className="candidate-action-row">
+                  <button type="button" className="button button-quiet" disabled={busy} onClick={() => setOfferOpen(false)}>Cancel</button>
+                  <button disabled={busy} className="button button-dark" style={{ background: '#6d28d9' }}>
+                    {busy ? 'Saving…' : 'Release Offer Letter & Clear Interview'} <ArrowRight size={14} />
+                  </button>
+                </div>
+              </form>
+            )}
+
             {pendingRejection && <div className="candidate-action-row"><button type="button" className="button button-quiet" disabled={busy} onClick={() => setPendingRejection(false)}>Cancel</button><button type="button" className="button button-dark danger-action" disabled={busy} onClick={() => updateApplication({ status: 'rejected' })}>{busy ? 'Saving…' : 'Save rejection'}</button></div>}
             {inviteOpen && <form className="interview-form" onSubmit={scheduleInterview}>
               <h3>Schedule an interview</h3>

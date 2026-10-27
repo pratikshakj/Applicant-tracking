@@ -22,7 +22,13 @@ class DashboardController extends Controller
         $totalJobs = Job::where('user_id', $userId)->count();
         $totalMatches = Matches::whereHas('job', fn ($jobs) => $jobs->where('user_id', $userId))->count();
         $shortlisted = Application::whereHas('job', fn ($jobs) => $jobs->where('user_id', $userId))
-            ->where('status', 'shortlisted')->count();
+            ->where(function ($query) {
+                $query->whereNotNull('shortlisted_at')
+                    ->orWhereIn('status', ['shortlisted', 'interview', 'cleared'])
+                    ->orWhereNotNull('interview_at')
+                    ->orWhereNotNull('offer_letter_text')
+                    ->orWhereNotNull('joining_date');
+            })->count();
 
         $avgMatch = (int) Matches::whereHas('job', fn ($jobs) => $jobs->where('user_id', $userId))
             ->avg('match_percentage');

@@ -118,6 +118,7 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
   const appliedJobIds = useMemo(() => new Set(applications.map((application) => application.job_id)), [applications]);
   const filteredJobs = jobs.filter((job) => (!department || job.department === department) && `${job.title} ${job.department || ''} ${job.user?.company_name || ''} ${(job.required_skills_json || []).join(' ')} ${job.description}`.toLowerCase().includes(search.toLowerCase()));
   const upcomingInterviews = applications.filter((application) => application.interview_at && new Date(application.interview_at) >= new Date());
+  const clearedOffers = useMemo(() => applications.filter((application) => application.status === 'cleared'), [applications]);
 
   const openApplyModal = (job) => {
     setSelectedJob(job);
@@ -159,6 +160,45 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
       setSection('applications');
     } catch (requestError) {
       setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const acceptOffer = async (applicationId) => {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await seekerApi(`/user/applications/${applicationId}/accept-offer`, { method: 'POST' });
+      setNotice(result.message || 'Offer accepted successfully! Welcome aboard.');
+      await refreshData();
+      if (selectedApplication && selectedApplication.id === applicationId) {
+        setSelectedApplication(result.application);
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const rejectOffer = async (applicationId) => {
+    if (!window.confirm('Are you sure you want to decline this job offer? This action will notify the employer.')) {
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await seekerApi(`/user/applications/${applicationId}/reject-offer`, { method: 'POST' });
+      setNotice(result.message || 'Offer declined.');
+      await refreshData();
+      if (selectedApplication && selectedApplication.id === applicationId) {
+        setSelectedApplication(result.application);
+      }
+    } catch (e) {
+      setError(e.message);
     } finally {
       setBusy(false);
     }
@@ -239,8 +279,12 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
     <header className="seeker-app-top">
       <Link className="seeker-brand" to="/"><span><Sparkles size={16} /></span>HireFlow</Link>
       <nav className="seeker-nav" aria-label="Job seeker navigation">
-        {[['discover', 'Find jobs'], ['recommended', 'For you'], ['applications', 'Applications'], ['profile', 'My profile']].map(([key, label]) =>
-          <button key={key} className={section === key ? 'selected' : ''} onClick={() => { setSection(key); setError(''); }}>{label}{key === 'applications' && applications.length > 0 && <small>{applications.length}</small>}</button>)}
+        {[['discover', 'Find jobs'], ['recommended', 'For you'], ['applications', 'Applications'], ['offers', 'Offer Letters'], ['profile', 'My profile']].map(([key, label]) =>
+          <button key={key} className={section === key ? 'selected' : ''} onClick={() => { setSection(key); setError(''); }}>
+            {label}
+            {key === 'applications' && applications.length > 0 && <small>{applications.length}</small>}
+            {key === 'offers' && clearedOffers.length > 0 && <small className="offer-nav-badge">{clearedOffers.length}</small>}
+          </button>)}
       </nav>
       <div className="seeker-app-account"><span className="seeker-app-avatar">{(profile?.name || user.name).split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span><span>{profile?.name || user.name}</span><button className="seeker-signout" onClick={onSignOut}><LogOut size={15} /> <span>Sign out</span></button></div>
     </header>
@@ -284,6 +328,13 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
                 <strong>{applications.length}</strong>
               </div>
             </div>
+            <div className={`app-stat-card ${appFilter === 'cleared' ? 'active' : ''}`} onClick={() => setAppFilter('cleared')}>
+              <div className="app-stat-icon" style={{ background: '#ecfdf5', color: '#059669' }}><CheckCircle2 size={18} /></div>
+              <div className="app-stat-info">
+                <span>Interview Cleared / Offers</span>
+                <strong>{applications.filter((a) => a.status === 'cleared').length}</strong>
+              </div>
+            </div>
             <div className={`app-stat-card ${appFilter === 'interview' ? 'active' : ''}`} onClick={() => setAppFilter('interview')}>
               <div className="app-stat-icon interview-icon"><CalendarDays size={18} /></div>
               <div className="app-stat-info">
@@ -308,7 +359,7 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
             <div className={`app-stat-card ${appFilter === 'rejected' ? 'active' : ''}`} onClick={() => setAppFilter('rejected')}>
               <div className="app-stat-icon rejected-icon"><XCircle size={18} /></div>
               <div className="app-stat-info">
-                <span>Declined</span>
+                <span>Declined / Rejected</span>
                 <strong>{applications.filter((a) => a.status === 'rejected').length}</strong>
               </div>
             </div>
@@ -337,6 +388,12 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
                 All ({applications.length})
               </button>
               <button
+                className={`app-pill ${appFilter === 'cleared' ? 'active' : ''}`}
+                onClick={() => setAppFilter('cleared')}
+              >
+                🎉 Interview Cleared ({applications.filter((a) => a.status === 'cleared').length})
+              </button>
+              <button
                 className={`app-pill ${appFilter === 'interview' ? 'active' : ''}`}
                 onClick={() => setAppFilter('interview')}
               >
@@ -358,7 +415,7 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
                 className={`app-pill ${appFilter === 'rejected' ? 'active' : ''}`}
                 onClick={() => setAppFilter('rejected')}
               >
-                Declined ({applications.filter((a) => a.status === 'rejected').length})
+                Declined / Rejected ({applications.filter((a) => a.status === 'rejected').length})
               </button>
             </div>
           </div>
@@ -379,6 +436,7 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
           (() => {
             const filteredApps = applications.filter((app) => {
               // Status filter
+              if (appFilter === 'cleared' && app.status !== 'cleared') return false;
               if (appFilter === 'interview' && app.status !== 'interview' && !app.interview_at) return false;
               if (appFilter === 'shortlisted' && (app.status !== 'shortlisted' || app.interview_at)) return false;
               if (appFilter === 'applied' && app.status !== 'applied') return false;
@@ -411,21 +469,22 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
             return (
               <div className="seeker-application-list">
                 {filteredApps.map((application) => {
-                  const isInterview = application.status === 'interview' || Boolean(application.interview_at);
-                  const isShortlisted = application.status === 'shortlisted' && !application.interview_at;
+                  const isCleared = application.status === 'cleared';
+                  const isInterview = (application.status === 'interview' || Boolean(application.interview_at)) && !isCleared;
+                  const isShortlisted = application.status === 'shortlisted' && !application.interview_at && !isCleared;
                   const isRejected = application.status === 'rejected';
                   const isApplied = application.status === 'applied';
 
                   return (
-                    <article key={application.id} className={`seeker-application-card enhanced-app-card ${isInterview ? 'card-interview' : isShortlisted ? 'card-shortlisted' : isRejected ? 'card-rejected' : ''}`}>
+                    <article key={application.id} className={`seeker-application-card enhanced-app-card ${isCleared ? 'card-cleared' : isInterview ? 'card-interview' : isShortlisted ? 'card-shortlisted' : isRejected ? 'card-rejected' : ''}`}>
                       <div className="seeker-application-main">
-                        <span className={`app-type-icon ${isInterview ? 'icon-interview' : isShortlisted ? 'icon-shortlisted' : isRejected ? 'icon-rejected' : 'icon-applied'}`}>
-                          {isInterview ? <CalendarDays size={20} /> : isShortlisted ? <CheckCircle2 size={20} /> : isRejected ? <XCircle size={20} /> : <BriefcaseBusiness size={20} />}
+                        <span className={`app-type-icon ${isCleared ? 'icon-cleared' : isInterview ? 'icon-interview' : isShortlisted ? 'icon-shortlisted' : isRejected ? 'icon-rejected' : 'icon-applied'}`}>
+                          {isCleared ? <Sparkles size={20} /> : isInterview ? <CalendarDays size={20} /> : isShortlisted ? <CheckCircle2 size={20} /> : isRejected ? <XCircle size={20} /> : <BriefcaseBusiness size={20} />}
                         </span>
                         <div className="app-main-details">
                           <div className="app-status-badge-row">
                             <span className={`seeker-status seeker-status-${application.status}`}>
-                              {isInterview ? 'Interview Scheduled' : isShortlisted ? 'Shortlisted' : isRejected ? 'Declined' : 'In Review'}
+                              {isCleared ? '🎉 Interview Cleared · Offer Extended' : isInterview ? 'Interview Scheduled' : isShortlisted ? 'Shortlisted' : isRejected ? 'Declined / Rejected' : 'In Review'}
                             </span>
                             <span className="app-date-chip">
                               <Clock size={11} /> Applied {new Date(application.created_at).toLocaleDateString()}
@@ -447,26 +506,75 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
                               <span className="step-label">Applied</span>
                             </div>
                             <div className={`step-line ${!isApplied ? 'active' : ''}`} />
-                            <div className={`step-item ${isShortlisted || isInterview ? 'completed' : isApplied ? 'current' : 'disabled'}`}>
-                              <span className="step-circle">{isShortlisted || isInterview ? <Check size={10} /> : '2'}</span>
-                              <span className="step-label">Review</span>
+                            <div className={`step-item ${isShortlisted || isInterview || isCleared ? 'completed' : isApplied ? 'current' : 'disabled'}`}>
+                              <span className="step-circle">{isShortlisted || isInterview || isCleared ? <Check size={10} /> : '2'}</span>
+                              <span className="step-label">Interview</span>
                             </div>
-                            <div className={`step-line ${isInterview || (isShortlisted && !isRejected) ? 'active' : ''}`} />
-                            <div className={`step-item ${isInterview ? 'completed highlight-interview' : isRejected ? 'failed' : 'disabled'}`}>
-                              <span className="step-circle">{isInterview ? <CalendarDays size={10} /> : isRejected ? '✕' : '3'}</span>
-                              <span className="step-label">{isRejected ? 'Decision' : 'Interview'}</span>
+                            <div className={`step-line ${isCleared ? 'active' : ''}`} />
+                            <div className={`step-item ${isCleared ? 'completed highlight-cleared' : isRejected ? 'failed' : 'disabled'}`}>
+                              <span className="step-circle">{isCleared ? <Check size={10} /> : isRejected ? '✕' : '3'}</span>
+                              <span className="step-label">{isCleared ? 'Offer' : isRejected ? 'Rejected' : 'Offer'}</span>
                             </div>
                           </div>
                         </div>
                       </div>
 
                       <div className="seeker-application-meta app-right-meta">
-                        {isRejected ? (
-                          <div className="seeker-interview-detail is-declined-detail">
-                            <Bell size={16} />
+                        {isCleared ? (
+                          <div className="seeker-interview-detail is-cleared-detail">
+                            <Sparkles size={18} />
                             <div>
-                              <b>Application Closed</b>
-                              <small>The employer decided not to proceed with this application at this time.</small>
+                              <b>Congratulations! Interview Cleared</b>
+                              <small className="cleared-joining-text">
+                                📅 <b>Joining Date:</b> {application.joining_date ? new Date(application.joining_date).toLocaleDateString() : 'To be coordinated'}
+                              </small>
+                              {application.joining_location && (
+                                <small className="cleared-location-text">
+                                  📍 <b>Location:</b> {application.joining_location}
+                                </small>
+                              )}
+                              {application.offer_letter_text && (
+                                <div className="offer-preview-box">
+                                  <b>Offer Letter:</b>
+                                  <p>{application.offer_letter_text.slice(0, 150)}{application.offer_letter_text.length > 150 ? '…' : ''}</p>
+                                </div>
+                              )}
+                              <div className="offer-action-row" style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                                {application.offer_accepted_at ? (
+                                  <span className="offer-accepted-chip">
+                                    ✓ Offer Accepted on {new Date(application.offer_accepted_at).toLocaleDateString()}
+                                  </span>
+                                ) : application.offer_declined_at ? (
+                                  <span className="offer-declined-chip">
+                                    ✕ Offer Declined ({new Date(application.offer_declined_at).toLocaleDateString()})
+                                  </span>
+                                ) : (
+                                  <>
+                                    <button
+                                      className="seeker-primary-button accept-offer-btn"
+                                      disabled={busy}
+                                      onClick={() => acceptOffer(application.id)}
+                                    >
+                                      Accept Offer
+                                    </button>
+                                    <button
+                                      className="seeker-outline-button reject-offer-btn"
+                                      disabled={busy}
+                                      onClick={() => rejectOffer(application.id)}
+                                    >
+                                      Decline
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ) : isRejected ? (
+                          <div className="seeker-interview-detail is-declined-detail">
+                            <XCircle size={16} />
+                            <div>
+                              <b>Interview / Application Not Cleared</b>
+                              <small>The hiring team has reviewed your application and decided not to proceed for this role.</small>
                             </div>
                           </div>
                         ) : isInterview ? (
@@ -517,6 +625,15 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
                         )}
 
                         <div className="app-card-actions">
+                          {isCleared && (
+                            <button
+                              type="button"
+                              className="seeker-primary-button view-offer-link-btn"
+                              onClick={() => setSection('offers')}
+                            >
+                              <FileCheck size={13} /> View Offer Letter
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="seeker-link-button app-details-btn"
@@ -532,6 +649,143 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
               </div>
             );
           })()
+        )}
+      </section>}
+
+      {section === 'offers' && <section className="seeker-section">
+        <div className="seeker-board-heading">
+          <div>
+            <span className="seeker-eyebrow">EMPLOYMENT OFFERS</span>
+            <h1>Offer Letters & Joining Details</h1>
+            <p>Review formal job offers extended following your cleared interviews and accept them directly.</p>
+          </div>
+          <span className="seeker-count-chip">{clearedOffers.length} {clearedOffers.length === 1 ? 'offer' : 'offers'} received</span>
+        </div>
+
+        {loading ? (
+          <div className="seeker-loading">Loading your offer letters…</div>
+        ) : !clearedOffers.length ? (
+          <div className="seeker-empty">
+            <Award size={32} />
+            <h3>No Offer Letters Yet</h3>
+            <p>Once you clear interviews for your submitted applications, formal offer letters and joining schedules will appear right here for your review and acceptance.</p>
+            <button className="seeker-primary-button" onClick={() => setSection('applications')}>
+              Check Applications Status <ArrowRight size={15} />
+            </button>
+          </div>
+        ) : (
+          <div className="offer-letters-container">
+            {clearedOffers.map((offerApp) => (
+              <div key={offerApp.id} className="formal-offer-sheet">
+                {/* Header */}
+                <div className="offer-sheet-header">
+                  <div className="offer-sheet-company">
+                    <span className="offer-company-icon"><BriefcaseBusiness size={24} /></span>
+                    <div>
+                      <h2>{offerApp.job?.title || 'Employment Offer'}</h2>
+                      <p>{offerApp.job?.user?.company_name || 'Hiring Organization'}{offerApp.job?.department ? ` · ${offerApp.job.department}` : ''}</p>
+                    </div>
+                  </div>
+                  <div className="offer-sheet-status">
+                    {offerApp.offer_accepted_at ? (
+                      <span className="offer-badge-accepted">
+                        ✓ Offer Accepted ({new Date(offerApp.offer_accepted_at).toLocaleDateString()})
+                      </span>
+                    ) : offerApp.offer_declined_at ? (
+                      <span className="offer-badge-declined">
+                        ✕ Offer Declined ({new Date(offerApp.offer_declined_at).toLocaleDateString()})
+                      </span>
+                    ) : (
+                      <span className="offer-badge-pending">
+                        ⏳ Awaiting Your Response
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Logistics Bar */}
+                <div className="offer-logistics-bar">
+                  <div className="logistics-item">
+                    <span className="logistics-label">CANDIDATE</span>
+                    <b>{offerApp.candidate?.parsed_name || profile?.name || user.name}</b>
+                  </div>
+                  <div className="logistics-item">
+                    <span className="logistics-label">EXPECTED JOINING DATE</span>
+                    <b>{offerApp.joining_date ? new Date(offerApp.joining_date).toLocaleDateString([], { dateStyle: 'full' }) : 'To be confirmed with HR'}</b>
+                  </div>
+                  <div className="logistics-item">
+                    <span className="logistics-label">WORK LOCATION / MODE</span>
+                    <b>{offerApp.joining_location || offerApp.job?.user?.location || 'Company Headquarters / Remote'}</b>
+                  </div>
+                  <div className="logistics-item">
+                    <span className="logistics-label">EMPLOYMENT TYPE</span>
+                    <b>{offerApp.job?.employment_type || 'Full-time'}</b>
+                  </div>
+                </div>
+
+                {/* Offer Letter Document Body */}
+                <div className="offer-letter-document">
+                  <div className="document-watermark">OFFICIAL OFFER</div>
+                  <div className="document-header-line">
+                    <span>DATE: {new Date(offerApp.updated_at || offerApp.created_at).toLocaleDateString()}</span>
+                    <span>REF: #OFFER-{offerApp.id}-{offerApp.job_id}</span>
+                  </div>
+                  <div className="document-body-text">
+                    {offerApp.offer_letter_text ? (
+                      offerApp.offer_letter_text
+                    ) : (
+                      <p>
+                        Dear {offerApp.candidate?.parsed_name || profile?.name || user.name},<br /><br />
+                        We are delighted to extend this formal offer of employment for the position of <b>{offerApp.job?.title}</b> with <b>{offerApp.job?.user?.company_name || 'our company'}</b> following your successful interview rounds.<br /><br />
+                        Please review the joining details outlined above and confirm your acceptance by clicking the button below. Our team will reach out with the onboarding schedule and required documentation.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Footer Action Bar */}
+                <div className="offer-sheet-footer">
+                  <div className="offer-footer-note">
+                    {offerApp.offer_accepted_at ? (
+                      <span>🎉 You formally accepted this offer letter on {new Date(offerApp.offer_accepted_at).toLocaleString()}. We look forward to having you on the team!</span>
+                    ) : offerApp.offer_declined_at ? (
+                      <span style={{ color: '#b91c1c' }}>You declined this employment offer on {new Date(offerApp.offer_declined_at).toLocaleString()}.</span>
+                    ) : (
+                      <span>Review the joining terms carefully. You can accept or decline this offer letter directly below.</span>
+                    )}
+                  </div>
+                  <div className="offer-footer-actions">
+                    {offerApp.offer_accepted_at ? (
+                      <button className="seeker-outline-button" disabled>
+                        ✓ Offer Formally Accepted
+                      </button>
+                    ) : offerApp.offer_declined_at ? (
+                      <button className="seeker-outline-button" disabled style={{ color: '#b91c1c', borderColor: '#fca5a5' }}>
+                        ✕ Offer Declined
+                      </button>
+                    ) : (
+                      <div className="offer-action-buttons-wrap">
+                        <button
+                          className="seeker-outline-button decline-offer-large-btn"
+                          disabled={busy}
+                          onClick={() => rejectOffer(offerApp.id)}
+                        >
+                          <X size={15} /> Decline Offer
+                        </button>
+                        <button
+                          className="seeker-primary-button accept-offer-large-btn"
+                          disabled={busy}
+                          onClick={() => acceptOffer(offerApp.id)}
+                        >
+                          <Check size={16} /> {busy ? 'Processing acceptance…' : 'Accept Offer Letter'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </section>}
 
@@ -851,26 +1105,42 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
             {/* Status Highlight Banner */}
             <div className={`app-modal-banner banner-${selectedApplication.status}`}>
               <div className="banner-icon">
-                {selectedApplication.status === 'interview' || selectedApplication.interview_at ? <CalendarDays size={22} /> : selectedApplication.status === 'shortlisted' ? <CheckCircle2 size={22} /> : selectedApplication.status === 'rejected' ? <XCircle size={22} /> : <Clock size={22} />}
+                {selectedApplication.status === 'cleared' ? <Sparkles size={22} /> : selectedApplication.status === 'interview' || selectedApplication.interview_at ? <CalendarDays size={22} /> : selectedApplication.status === 'shortlisted' ? <CheckCircle2 size={22} /> : selectedApplication.status === 'rejected' ? <XCircle size={22} /> : <Clock size={22} />}
               </div>
               <div className="banner-content">
                 <h4>
-                  {selectedApplication.status === 'interview' || selectedApplication.interview_at
+                  {selectedApplication.status === 'cleared'
+                    ? '🎉 Congratulations! Interview Cleared'
+                    : selectedApplication.status === 'interview' || selectedApplication.interview_at
                     ? 'Interview Scheduled'
                     : selectedApplication.status === 'shortlisted'
                     ? 'Application Shortlisted'
                     : selectedApplication.status === 'rejected'
-                    ? 'Application Declined'
+                    ? 'Application Declined / Interview Not Cleared'
                     : 'Application In Review'}
                 </h4>
-                {selectedApplication.interview_at ? (
+                {selectedApplication.status === 'cleared' ? (
+                  <div>
+                    <p>You have cleared the interviews! The employer has extended an official offer and joining details.</p>
+                    <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                      <span style={{ fontSize: '11px', color: '#166534' }}>
+                        📅 <b>Joining Date:</b> {selectedApplication.joining_date ? new Date(selectedApplication.joining_date).toLocaleDateString([], { dateStyle: 'full' }) : 'To be confirmed'}
+                      </span>
+                      {selectedApplication.joining_location && (
+                        <span style={{ fontSize: '11px', color: '#166534' }}>
+                          📍 <b>Location / Campus:</b> {selectedApplication.joining_location}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : selectedApplication.interview_at ? (
                   <p>
                     <b>Scheduled Time:</b> {new Date(selectedApplication.interview_at).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' })}
                   </p>
                 ) : selectedApplication.status === 'shortlisted' ? (
                   <p>You have been shortlisted! The recruiter has flagged your application for next steps.</p>
                 ) : selectedApplication.status === 'rejected' ? (
-                  <p>Thank you for applying. While this position won't move forward, keep exploring other opportunities.</p>
+                  <p>Thank you for your time and effort. The hiring team has decided not to move forward with this position.</p>
                 ) : (
                   <p>Your application was received by the employer and is currently being evaluated.</p>
                 )}
@@ -882,6 +1152,44 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
                 )}
               </div>
             </div>
+
+            {/* Offer Letter & Acceptance Section in Modal */}
+            {selectedApplication.status === 'cleared' && (
+              <div className="app-modal-section offer-modal-section">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <h3 style={{ margin: 0, color: '#15803d' }}>Official Offer Letter</h3>
+                  {selectedApplication.offer_accepted_at ? (
+                    <span className="offer-accepted-chip">
+                      ✓ Offer Accepted on {new Date(selectedApplication.offer_accepted_at).toLocaleString()}
+                    </span>
+                  ) : selectedApplication.offer_declined_at ? (
+                    <span className="offer-declined-chip">
+                      ✕ Offer Declined ({new Date(selectedApplication.offer_declined_at).toLocaleDateString()})
+                    </span>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        className="seeker-outline-button reject-offer-btn"
+                        disabled={busy}
+                        onClick={() => rejectOffer(selectedApplication.id)}
+                      >
+                        Decline
+                      </button>
+                      <button
+                        className="seeker-primary-button accept-offer-btn"
+                        disabled={busy}
+                        onClick={() => acceptOffer(selectedApplication.id)}
+                      >
+                        {busy ? 'Accepting…' : 'Accept Offer Letter'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="offer-letter-full-text">
+                  {selectedApplication.offer_letter_text || 'Welcome to the team! Full onboarding documentation will be sent to your email.'}
+                </div>
+              </div>
+            )}
 
             {/* Role Summary */}
             {selectedApplication.job?.description && (
