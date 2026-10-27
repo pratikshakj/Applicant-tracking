@@ -1,0 +1,31 @@
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+
+# Laravel dependencies
+/vendor/
+
+# Node.js dependencies
+/node_modules/
+**/node_modules/
+
+# Python virtual environments
+venv/
+.venv/
+ai_services/venv/
+ai_services/.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Editor settings
+/.vscode/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
