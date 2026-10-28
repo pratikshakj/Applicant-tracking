@@ -287,6 +287,11 @@ class JobSeekerController extends Controller
                 'raw_json' => $payload,
             ],
         );
+
+        $newScore = (int) ($payload['match_percentage'] ?? 0);
+        if ($newScore > (int) $candidate->ai_match_percentage) {
+            $candidate->update(['ai_match_percentage' => $newScore]);
+        }
         $application = Application::create([
             'user_id' => $request->user()->id,
             'candidate_id' => $candidate->id,

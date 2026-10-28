@@ -174,29 +174,32 @@ class ResumeController extends Controller
     {
         $jobId = $request->query('job_id');
 
-        $jobQuery = Job::where('user_id', $request->user()->id);
-
-        $job = $jobId
-            ? $jobQuery->where('id', $jobId)->first()
-            : $jobQuery->latest()->first();
-
-        if (!$job) {
-            return response()->json(['job' => null, 'matches' => [], 'jobs' => []]);
-        }
-
-        $matches = Matches::with(['candidate', 'job'])
-            ->where('job_id', $job->id)
-            ->orderByDesc('match_percentage')
-            ->get();
-
         $jobs = Job::where('user_id', $request->user()->id)
             ->orderByDesc('created_at')
-            ->get(['id', 'title']);
+            ->get(['id', 'title', 'department', 'status']);
+
+        $matchesQuery = Matches::with([
+            'candidate:id,user_id,parsed_name,parsed_email,parsed_phone,extracted_skills_json,ai_match_percentage,status',
+            'job:id,title,department,status',
+            'candidate.applications' => fn ($q) => $q->whereHas('job', fn ($j) => $j->where('user_id', $request->user()->id))
+        ])
+        ->whereHas('job', fn ($jobs) => $jobs->where('user_id', $request->user()->id))
+        ->orderByDesc('match_percentage');
+
+        if ($jobId && $jobId !== 'all') {
+            $matchesQuery->where('job_id', $jobId);
+            $selectedJob = $jobs->firstWhere('id', (int) $jobId);
+        } else {
+            $selectedJob = null;
+        }
+
+        $matches = $matchesQuery->get();
 
         return response()->json([
-            'job' => $job,
+            'job' => $selectedJob,
             'jobs' => $jobs,
             'matches' => $matches,
+            'total' => $matches->count(),
         ]);
     }
 

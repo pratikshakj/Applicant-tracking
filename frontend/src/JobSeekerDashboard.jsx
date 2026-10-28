@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowDownToLine, ArrowRight, Award, Bell, BriefcaseBusiness, Calendar, CalendarDays, Check,
+  ArrowDownToLine, ArrowRight, Award, BarChart3, Bell, BriefcaseBusiness, Calendar, CalendarDays, Check,
   CheckCircle2, ChevronRight, CircleDot, CircleUserRound, Clock, ExternalLink,
   FileCheck, FileText, Filter, GraduationCap, Info, LogOut, MapPin, Search,
-  Sparkles, Upload, UserRound, X, XCircle
+  Sparkles, TrendingUp, Upload, UserRound, X, XCircle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { JOB_DEPARTMENTS } from './jobOptions.js';
@@ -33,6 +33,140 @@ function splitList(value) {
 
 function SeekerNotice({ children, error = false }) {
   return <div className={`seeker-notice ${error ? 'is-error' : ''}`} role={error ? 'alert' : 'status'}>{children}</div>;
+}
+
+function JobSeekerJobPostingGraph({ jobs, onSelectDepartment, currentDepartment }) {
+  const [view, setView] = useState('dept'); // 'dept' | 'timeline'
+
+  // Aggregate by Department
+  const deptCounts = {};
+  jobs.forEach((j) => {
+    const d = j.department || 'General';
+    deptCounts[d] = (deptCounts[d] || 0) + 1;
+  });
+  const sortedDepts = Object.entries(deptCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8);
+
+  const maxDeptCount = Math.max(...sortedDepts.map((d) => d[1]), 1);
+
+  // Aggregate by Timeline (Month)
+  const monthCounts = {};
+  jobs.forEach((j) => {
+    if (!j.created_at) return;
+    const date = new Date(j.created_at);
+    const key = date.toLocaleDateString([], { month: 'short', year: 'numeric' });
+    monthCounts[key] = (monthCounts[key] || 0) + 1;
+  });
+  const timelineEntries = Object.entries(monthCounts).slice(-6);
+  const maxTimeCount = Math.max(...timelineEntries.map((t) => t[1]), 1);
+
+  // Aggregate top in-demand skills
+  const skillFreq = {};
+  jobs.forEach((j) => {
+    (j.required_skills_json || []).forEach((s) => {
+      skillFreq[s] = (skillFreq[s] || 0) + 1;
+    });
+  });
+  const topSkills = Object.entries(skillFreq)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map((s) => s[0]);
+
+  return (
+    <div className="seeker-panel seeker-analytics-panel">
+      <div className="seeker-analytics-header">
+        <div>
+          <span className="seeker-eyebrow">HIRING MARKET DEMAND</span>
+          <h2>Job Postings & Industry Demand</h2>
+          <p>Live overview of active job openings across departments and posting volume.</p>
+        </div>
+        <div className="seeker-view-pills">
+          <button
+            type="button"
+            className={`seeker-pill-btn ${view === 'dept' ? 'active' : ''}`}
+            onClick={() => setView('dept')}
+          >
+            <BarChart3 size={13} /> By Department ({sortedDepts.length})
+          </button>
+          <button
+            type="button"
+            className={`seeker-pill-btn ${view === 'timeline' ? 'active' : ''}`}
+            onClick={() => setView('timeline')}
+          >
+            <TrendingUp size={13} /> Posting Timeline
+          </button>
+        </div>
+      </div>
+
+      {view === 'dept' ? (
+        <div className="dept-bars-grid">
+          {sortedDepts.map(([deptName, count]) => {
+            const pct = Math.round((count / (jobs.length || 1)) * 100);
+            const isSelected = currentDepartment === deptName;
+
+            return (
+              <div
+                key={deptName}
+                className={`dept-bar-card ${isSelected ? 'selected' : ''}`}
+                onClick={() => onSelectDepartment(isSelected ? '' : deptName)}
+                title={`Click to filter jobs by ${deptName}`}
+              >
+                <div className="dept-card-top">
+                  <b>{deptName}</b>
+                  <span className="dept-count-badge">{count} {count === 1 ? 'role' : 'roles'}</span>
+                </div>
+                <div className="dept-progress-track">
+                  <div
+                    className="dept-progress-fill"
+                    style={{ width: `${Math.round((count / maxDeptCount) * 100)}%` }}
+                  />
+                </div>
+                <div className="dept-card-meta">
+                  <small>{pct}% of active postings</small>
+                  {isSelected && <span className="dept-active-tag">Filtered ✓</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="timeline-chart-wrapper">
+          <div className="timeline-bars-row">
+            {timelineEntries.map(([monthLabel, count]) => {
+              const h = Math.max(16, Math.round((count / maxTimeCount) * 120));
+              return (
+                <div key={monthLabel} className="timeline-col">
+                  <span className="timeline-val">{count}</span>
+                  <div className="timeline-bar-fill" style={{ height: `${h}px` }} />
+                  <span className="timeline-label">{monthLabel}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="seeker-analytics-footer">
+        <div className="seeker-market-chip">
+          <BriefcaseBusiness size={14} />
+          <span><b>{jobs.length}</b> total open positions</span>
+        </div>
+        {sortedDepts[0] && (
+          <div className="seeker-market-chip">
+            <TrendingUp size={14} />
+            <span>Top department: <b>{sortedDepts[0][0]}</b> ({sortedDepts[0][1]} openings)</span>
+          </div>
+        )}
+        {topSkills.length > 0 && (
+          <div className="seeker-market-chip">
+            <Sparkles size={14} />
+            <span>In-demand skills: <b>{topSkills.join(', ')}</b></span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function JobSeekerDashboard({ user, onSignOut }) {
@@ -294,6 +428,13 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
       {section === 'discover' && <section>
         <div className="seeker-welcome-panel"><div><span className="seeker-eyebrow">YOUR NEXT CHAPTER</span><h1>Good opportunities<br /><em>start with a search.</em></h1><p>Explore open roles, compare the requirements, and apply with your resume.</p></div><div className="seeker-welcome-art"><BriefcaseBusiness size={27} /><span>Make your next move</span><small>Clear roles. Real skills. Your decision.</small></div></div>
         {upcomingInterviews.length > 0 && <button className="seeker-interview-banner" onClick={() => setSection('applications')}><Bell size={18} /><span><b>You have {upcomingInterviews.length} upcoming interview{upcomingInterviews.length === 1 ? '' : 's'}</b><small>See the invitation and interview details in your applications.</small></span><ArrowRight size={17} /></button>}
+        {jobs.length > 0 && (
+          <JobSeekerJobPostingGraph
+            jobs={jobs}
+            currentDepartment={department}
+            onSelectDepartment={(dept) => setDepartment(dept)}
+          />
+        )}
         <div className="seeker-board-heading"><div><span className="seeker-eyebrow">OPEN OPPORTUNITIES</span><h2>Find a role that fits</h2></div><span>{filteredJobs.length} roles</span></div>
         <div className="seeker-job-filters"><label className="seeker-search seeker-search-pro"><Search size={18} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search job title, company, description, or skill" /></label><label className="seeker-department-filter">Department<select value={department} onChange={(event) => setDepartment(event.target.value)}><option value="">All departments</option>{JOB_DEPARTMENTS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label></div>
         {loading ? <div className="seeker-loading">Loading open roles…</div> : filteredJobs.length ? <div className="seeker-job-grid">{filteredJobs.map((job) => <article className="seeker-job-card" key={job.id}>
@@ -435,14 +576,11 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
         ) : (
           (() => {
             const filteredApps = applications.filter((app) => {
-              // Status filter
               if (appFilter === 'cleared' && app.status !== 'cleared') return false;
               if (appFilter === 'interview' && app.status !== 'interview' && !app.interview_at) return false;
               if (appFilter === 'shortlisted' && (app.status !== 'shortlisted' || app.interview_at)) return false;
               if (appFilter === 'applied' && app.status !== 'applied') return false;
               if (appFilter === 'rejected' && app.status !== 'rejected') return false;
-
-              // Text search filter
               if (appSearch) {
                 const query = appSearch.toLowerCase();
                 const title = (app.job?.title || '').toLowerCase();
@@ -473,95 +611,83 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
                   const isInterview = (application.status === 'interview' || Boolean(application.interview_at)) && !isCleared;
                   const isShortlisted = application.status === 'shortlisted' && !application.interview_at && !isCleared;
                   const isRejected = application.status === 'rejected';
-                  const isApplied = application.status === 'applied';
-
                   return (
-                    <article key={application.id} className={`seeker-application-card enhanced-app-card ${isCleared ? 'card-cleared' : isInterview ? 'card-interview' : isShortlisted ? 'card-shortlisted' : isRejected ? 'card-rejected' : ''}`}>
-                      <div className="seeker-application-main">
-                        <span className={`app-type-icon ${isCleared ? 'icon-cleared' : isInterview ? 'icon-interview' : isShortlisted ? 'icon-shortlisted' : isRejected ? 'icon-rejected' : 'icon-applied'}`}>
-                          {isCleared ? <Sparkles size={20} /> : isInterview ? <CalendarDays size={20} /> : isShortlisted ? <CheckCircle2 size={20} /> : isRejected ? <XCircle size={20} /> : <BriefcaseBusiness size={20} />}
-                        </span>
-                        <div className="app-main-details">
-                          <div className="app-status-badge-row">
-                            <span className={`seeker-status seeker-status-${application.status}`}>
-                              {isCleared ? '🎉 Interview Cleared · Offer Extended' : isInterview ? 'Interview Scheduled' : isShortlisted ? 'Shortlisted' : isRejected ? 'Declined / Rejected' : 'In Review'}
-                            </span>
-                            <span className="app-date-chip">
-                              <Clock size={11} /> Applied {new Date(application.created_at).toLocaleDateString()}
-                            </span>
+                    <article key={application.id} className={`app-card-v2 ${isCleared ? 'app-v2-cleared' : isInterview ? 'app-v2-interview' : isShortlisted ? 'app-v2-shortlisted' : isRejected ? 'app-v2-rejected' : 'app-v2-applied'}`}>
+                      {/* Card Header */}
+                      <div className="app-v2-header">
+                        <div className="app-v2-header-left">
+                          <span className={`app-v2-icon ${isCleared ? 'icon-cleared' : isInterview ? 'icon-interview' : isShortlisted ? 'icon-shortlisted' : isRejected ? 'icon-rejected' : 'icon-applied'}`}>
+                            {isCleared ? <Sparkles size={18} /> : isInterview ? <CalendarDays size={18} /> : isShortlisted ? <CheckCircle2 size={18} /> : isRejected ? <XCircle size={18} /> : <BriefcaseBusiness size={18} />}
+                          </span>
+                          <div>
+                            <h3 className="app-v2-title">{application.job?.title || 'Job listing'}</h3>
+                            <p className="app-v2-company">
+                              {application.job?.user?.company_name || 'Hiring Company'}
+                              {application.job?.department && <span> · {application.job.department}</span>}
+                              {application.job?.employment_type && <span> · {application.job.employment_type}</span>}
+                            </p>
                           </div>
-
-                          <h3>{application.job?.title || 'Job listing'}</h3>
-                          <p className="app-company-line">
-                            <b>{application.job?.user?.company_name || 'Hiring Company'}</b>
-                            {application.job?.department && <span> · {application.job.department}</span>}
-                            {application.job?.employment_type && <span> · {application.job.employment_type}</span>}
-                            {application.job?.user?.location && <span> · <MapPin size={11} /> {application.job.user.location}</span>}
-                          </p>
-
-                          {/* Progress Stepper for Application Lifecycle */}
-                          <div className="app-progress-stepper">
-                            <div className={`step-item completed`}>
-                              <span className="step-circle"><Check size={10} /></span>
-                              <span className="step-label">Applied</span>
-                            </div>
-                            <div className={`step-line ${!isApplied ? 'active' : ''}`} />
-                            <div className={`step-item ${isShortlisted || isInterview || isCleared ? 'completed' : isApplied ? 'current' : 'disabled'}`}>
-                              <span className="step-circle">{isShortlisted || isInterview || isCleared ? <Check size={10} /> : '2'}</span>
-                              <span className="step-label">Interview</span>
-                            </div>
-                            <div className={`step-line ${isCleared ? 'active' : ''}`} />
-                            <div className={`step-item ${isCleared ? 'completed highlight-cleared' : isRejected ? 'failed' : 'disabled'}`}>
-                              <span className="step-circle">{isCleared ? <Check size={10} /> : isRejected ? '✕' : '3'}</span>
-                              <span className="step-label">{isCleared ? 'Offer' : isRejected ? 'Rejected' : 'Offer'}</span>
-                            </div>
-                          </div>
+                        </div>
+                        <div className="app-v2-header-right">
+                          <span className={`app-v2-status-badge status-${application.status}`}>
+                            {isCleared ? '🎉 Offer Extended' : isInterview ? '📅 Interview' : isShortlisted ? '✓ Shortlisted' : isRejected ? '✕ Declined' : '⏳ In Review'}
+                          </span>
+                          <span className="app-v2-date">
+                            Applied {new Date(application.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
                         </div>
                       </div>
 
-                      <div className="seeker-application-meta app-right-meta">
+                      {/* Progress Stepper */}
+                      <div className="app-v2-stepper">
+                        <div className="app-v2-step step-done">
+                          <span className="app-v2-step-dot"><Check size={10} /></span>
+                          <span className="app-v2-step-text">Applied</span>
+                        </div>
+                        <div className={`app-v2-step-line ${isShortlisted || isInterview || isCleared ? 'line-done' : ''}`} />
+                        <div className={`app-v2-step ${isShortlisted || isInterview || isCleared ? 'step-done' : ''}`}>
+                          <span className="app-v2-step-dot">{isShortlisted || isInterview || isCleared ? <Check size={10} /> : '2'}</span>
+                          <span className="app-v2-step-text">Shortlisted</span>
+                        </div>
+                        <div className={`app-v2-step-line ${isInterview || isCleared ? 'line-done' : ''}`} />
+                        <div className={`app-v2-step ${isInterview || isCleared ? 'step-done' : ''}`}>
+                          <span className="app-v2-step-dot">{isInterview || isCleared ? <Check size={10} /> : '3'}</span>
+                          <span className="app-v2-step-text">Interview</span>
+                        </div>
+                        <div className={`app-v2-step-line ${isCleared ? 'line-done' : isRejected ? 'line-fail' : ''}`} />
+                        <div className={`app-v2-step ${isCleared ? 'step-done step-success' : isRejected ? 'step-fail' : ''}`}>
+                          <span className="app-v2-step-dot">{isCleared ? <Check size={10} /> : isRejected ? '✕' : '4'}</span>
+                          <span className="app-v2-step-text">{isRejected ? 'Rejected' : 'Offer'}</span>
+                        </div>
+                      </div>
+
+                      {/* Status Detail Banner */}
+                      <div className={`app-v2-detail-banner ${isCleared ? 'banner-cleared' : isInterview ? 'banner-interview' : isShortlisted ? 'banner-shortlisted' : isRejected ? 'banner-rejected' : 'banner-pending'}`}>
                         {isCleared ? (
-                          <div className="seeker-interview-detail is-cleared-detail">
-                            <Sparkles size={18} />
-                            <div>
+                          <div className="app-v2-detail-content">
+                            <div className="app-v2-detail-icon"><Sparkles size={16} /></div>
+                            <div className="app-v2-detail-body">
                               <b>Congratulations! Interview Cleared</b>
-                              <small className="cleared-joining-text">
-                                📅 <b>Joining Date:</b> {application.joining_date ? new Date(application.joining_date).toLocaleDateString() : 'To be coordinated'}
-                              </small>
-                              {application.joining_location && (
-                                <small className="cleared-location-text">
-                                  📍 <b>Location:</b> {application.joining_location}
-                                </small>
-                              )}
+                              <div className="app-v2-detail-meta">
+                                <span>📅 <b>Joining:</b> {application.joining_date ? new Date(application.joining_date).toLocaleDateString([], { dateStyle: 'medium' }) : 'To be coordinated'}</span>
+                                {application.joining_location && <span>📍 <b>Location:</b> {application.joining_location}</span>}
+                              </div>
                               {application.offer_letter_text && (
-                                <div className="offer-preview-box">
-                                  <b>Offer Letter:</b>
-                                  <p>{application.offer_letter_text.slice(0, 150)}{application.offer_letter_text.length > 150 ? '…' : ''}</p>
+                                <div className="app-v2-offer-preview">
+                                  <b>Offer Letter:</b> {application.offer_letter_text.slice(0, 120)}{application.offer_letter_text.length > 120 ? '…' : ''}
                                 </div>
                               )}
-                              <div className="offer-action-row" style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                              <div className="app-v2-offer-actions">
                                 {application.offer_accepted_at ? (
-                                  <span className="offer-accepted-chip">
-                                    ✓ Offer Accepted on {new Date(application.offer_accepted_at).toLocaleDateString()}
-                                  </span>
+                                  <span className="offer-accepted-chip">✓ Offer Accepted on {new Date(application.offer_accepted_at).toLocaleDateString()}</span>
                                 ) : application.offer_declined_at ? (
-                                  <span className="offer-declined-chip">
-                                    ✕ Offer Declined ({new Date(application.offer_declined_at).toLocaleDateString()})
-                                  </span>
+                                  <span className="offer-declined-chip">✕ Offer Declined ({new Date(application.offer_declined_at).toLocaleDateString()})</span>
                                 ) : (
                                   <>
-                                    <button
-                                      className="seeker-primary-button accept-offer-btn"
-                                      disabled={busy}
-                                      onClick={() => acceptOffer(application.id)}
-                                    >
-                                      Accept Offer
+                                    <button className="seeker-primary-button accept-offer-btn" disabled={busy} onClick={() => acceptOffer(application.id)}>
+                                      <Check size={14} /> Accept Offer
                                     </button>
-                                    <button
-                                      className="seeker-outline-button reject-offer-btn"
-                                      disabled={busy}
-                                      onClick={() => rejectOffer(application.id)}
-                                    >
+                                    <button className="seeker-outline-button reject-offer-btn" disabled={busy} onClick={() => rejectOffer(application.id)}>
                                       Decline
                                     </button>
                                   </>
@@ -569,77 +695,68 @@ export default function JobSeekerDashboard({ user, onSignOut }) {
                               </div>
                             </div>
                           </div>
-                        ) : isRejected ? (
-                          <div className="seeker-interview-detail is-declined-detail">
-                            <XCircle size={16} />
-                            <div>
-                              <b>Interview / Application Not Cleared</b>
-                              <small>The hiring team has reviewed your application and decided not to proceed for this role.</small>
-                            </div>
-                          </div>
                         ) : isInterview ? (
-                          <div className="seeker-interview-detail is-active-interview">
-                            <CalendarDays size={18} />
-                            <div>
+                          <div className="app-v2-detail-content">
+                            <div className="app-v2-detail-icon"><CalendarDays size={16} /></div>
+                            <div className="app-v2-detail-body">
                               <b>Upcoming Interview</b>
-                              <small className="interview-datetime">
-                                📅 {new Date(application.interview_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                              </small>
+                              <span className="app-v2-interview-time">
+                                📅 {new Date(application.interview_at).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' })}
+                              </span>
                               {application.interview_notes && (
-                                <p className="interview-notes-box">
-                                  <b>Instructions / Link:</b> {application.interview_notes}
-                                </p>
+                                <div className="app-v2-interview-notes">
+                                  <b>Instructions:</b> {application.interview_notes}
+                                </div>
                               )}
                             </div>
                           </div>
                         ) : isShortlisted ? (
-                          <div className="seeker-interview-detail is-shortlisted-detail">
-                            <CheckCircle2 size={16} />
-                            <div>
+                          <div className="app-v2-detail-content">
+                            <div className="app-v2-detail-icon"><CheckCircle2 size={16} /></div>
+                            <div className="app-v2-detail-body">
                               <b>You have been shortlisted!</b>
-                              <small>The hiring team approved your profile. They will contact you or schedule an interview soon.</small>
+                              <span>The hiring team approved your profile. They will schedule an interview soon.</span>
+                            </div>
+                          </div>
+                        ) : isRejected ? (
+                          <div className="app-v2-detail-content">
+                            <div className="app-v2-detail-icon"><XCircle size={16} /></div>
+                            <div className="app-v2-detail-body">
+                              <b>Application Not Selected</b>
+                              <span>The hiring team decided not to proceed with your application for this role.</span>
                             </div>
                           </div>
                         ) : (
-                          <div className="seeker-interview-detail is-pending-detail">
-                            <Clock size={16} />
-                            <div>
+                          <div className="app-v2-detail-content">
+                            <div className="app-v2-detail-icon"><Clock size={16} /></div>
+                            <div className="app-v2-detail-body">
                               <b>Under Review</b>
-                              <small>Your resume and application details are currently with the recruiting team.</small>
+                              <span>Your resume is currently being reviewed by the recruiting team.</span>
                             </div>
                           </div>
                         )}
+                      </div>
 
+                      {/* Footer: Skills + Actions */}
+                      <div className="app-v2-footer">
                         {application.candidate?.extracted_skills_json?.length > 0 && (
-                          <div className="app-matched-skills-preview">
-                            <span className="meta-skills-title">Resume Skills Attached:</span>
-                            <div className="seeker-skill-tags">
-                              {application.candidate.extracted_skills_json.slice(0, 4).map((skill) => (
-                                <span key={skill}>{skill}</span>
-                              ))}
-                              {application.candidate.extracted_skills_json.length > 4 && (
-                                <span className="more-skills-tag">+{application.candidate.extracted_skills_json.length - 4} more</span>
-                              )}
-                            </div>
+                          <div className="app-v2-skills">
+                            {application.candidate.extracted_skills_json.slice(0, 5).map((skill) => (
+                              <span key={skill} className="app-v2-skill-chip">{skill}</span>
+                            ))}
+                            {application.candidate.extracted_skills_json.length > 5 && (
+                              <span className="app-v2-skill-chip more">+{application.candidate.extracted_skills_json.length - 5}</span>
+                            )}
                           </div>
                         )}
-
-                        <div className="app-card-actions">
+                        <div className="app-v2-actions">
                           {isCleared && (
-                            <button
-                              type="button"
-                              className="seeker-primary-button view-offer-link-btn"
-                              onClick={() => setSection('offers')}
-                            >
-                              <FileCheck size={13} /> View Offer Letter
+                            <button type="button" className="seeker-primary-button view-offer-link-btn" onClick={() => setSection('offers')}>
+                              <FileCheck size={13} /> View Offer
                             </button>
                           )}
-                          <button
-                            type="button"
-                            className="seeker-link-button app-details-btn"
-                            onClick={() => setSelectedApplication(application)}
-                          >
-                            View details & history <ChevronRight size={14} />
+                          <button type="button" className="seeker-link-button app-details-btn" onClick={() => setSelectedApplication(application)}>
+                            View details <ChevronRight size={14} />
                           </button>
                         </div>
                       </div>

@@ -3,9 +3,9 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-r
 import JobSeekerDashboard from './JobSeekerDashboard.jsx';
 import { EMPLOYMENT_TYPES, JOB_DEPARTMENTS } from './jobOptions.js';
 import {
-  ArrowDownRight, ArrowRight, BriefcaseBusiness, CalendarDays, Check, ChevronDown, CircleHelp,
-  FileText, LayoutDashboard, LogOut, Mail, MapPin, Menu, Plus, Search, Settings2, ShoppingCart, Sparkles,
-  Target, Trash2, UserRound, Users, X,
+  ArrowDownRight, ArrowRight, Award, BarChart3, BriefcaseBusiness, Building2, CalendarDays, Check,
+  ChevronDown, CircleHelp, Eye, FileText, Globe, LayoutDashboard, LogOut, Mail, MapPin, Menu, Plus,
+  Search, Settings2, ShoppingCart, Sparkles, Target, Trash2, TrendingUp, UserRound, Users, X,
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
@@ -230,7 +230,7 @@ function Workspace({ user, onSignOut }) {
   return <div className="workspace">
     <aside className={`sidebar ${mobileOpen ? 'sidebar-open' : ''}`}><div className="sidebar-brand"><Brand /><button className="icon-button close-menu" onClick={() => setMobileOpen(false)} aria-label="Close menu"><X size={18} /></button></div><div className="workspace-label">WORKSPACE</div><nav className="side-nav">{sections.map(({ key, label, icon: Icon }) => <button key={key} className={`side-link ${active === key ? 'active' : ''}`} onClick={() => go(key)}><Icon size={17} />{label}{key === 'screening' && <span className="side-new">AI</span>}{key === 'interviews' && cartCount > 0 && <span className="side-new">{cartCount}</span>}</button>)}</nav><div className="sidebar-bottom"><button className="account-button" onClick={() => go('account')}><span className="user-avatar">{initials(user.name)}</span><span className="account-copy"><b>{user.name}</b><small>{user.company_name || 'Recruiter account'}</small></span><ChevronDown size={15} /></button></div></aside>
     <main className="workspace-main"><header className="workspace-top"><button className="icon-button mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu size={20} /></button><span className="breadcrumb">Hiring workspace <span>/</span> {sectionTitle(active)}</span><div className="top-actions"><span className="api-status"><i /> RECRUITER VIEW</span><button onClick={onSignOut} className="signout-button"><LogOut size={16} /><span>Sign out</span></button></div></header>
-      <Routes><Route index element={<Navigate to="overview" replace />} /><Route path="overview" element={<Dashboard user={user} onNavigate={go} />} /><Route path="jobs" element={<Jobs />} /><Route path="candidates" element={<Candidates userId={user.id} />} /><Route path="interviews" element={<InterviewCart userId={user.id} />} /><Route path="screening" element={<Screening />} /><Route path="account" element={<Account user={user} />} /><Route path="*" element={<Navigate to="overview" replace />} /></Routes>
+      <Routes><Route index element={<Navigate to="overview" replace />} /><Route path="overview" element={<Dashboard user={user} onNavigate={go} />} /><Route path="jobs" element={<Jobs />} /><Route path="candidates" element={<Candidates userId={user.id} />} /><Route path="interviews" element={<InterviewCart userId={user.id} />} /><Route path="screening" element={<Screening userId={user.id} />} /><Route path="account" element={<Account user={user} />} /><Route path="*" element={<Navigate to="overview" replace />} /></Routes>
     </main>
   </div>;
 }
@@ -247,12 +247,166 @@ function Dashboard({ user, onNavigate }) {
   useEffect(() => { Promise.all([api('/dashboard/stats'), api('/jobs')]).then(([stats, jobData]) => { setData(stats); setJobs(jobData.jobs || []); }).catch((e) => setError(e.message)); }, []);
   return <div className="page-content"><PageHeader eyebrow="YOUR HIRING DESK" title={`Good ${greeting()}, ${user.name.split(' ')[0]}.`} description="A clear view of the roles and candidates moving through your workspace." action={<button className="button button-dark" onClick={() => onNavigate('jobs')}><Plus size={16} /> Add a job</button>} />
     {error && <Notice error>{error}</Notice>}{!data && !error ? <Loading /> : <>
-      <section className="metric-grid"><Metric label="OPEN ROLES" value={jobs.filter((job) => job.status === 'open').length} detail={`${jobs.length} total roles`} icon={BriefcaseBusiness} tone="peach" /><Metric label="CANDIDATES" value={data?.stats?.total_candidates ?? 0} detail="Resumes in your workspace" icon={Users} tone="mint" /><Metric label="AI MATCHES" value={data?.stats?.total_matches ?? 0} detail="Across your open roles" icon={Target} tone="lemon" /><Metric label="SHORTLISTED" value={data?.stats?.shortlisted ?? 0} detail="Flagged for review" icon={Sparkles} tone="lilac" /></section>
+      <section className="metric-grid"><Metric label="OPEN ROLES" value={jobs.filter((job) => job.status === 'open').length} detail={`${jobs.length} total roles`} icon={BriefcaseBusiness} tone="peach" /><Metric label="CANDIDATES" value={data?.stats?.total_candidates ?? 0} detail="Resumes in your workspace" icon={Users} tone="mint" /><Metric label="SHORTLISTED" value={data?.stats?.shortlisted ?? 0} detail="Flagged for review" icon={Sparkles} tone="lilac" /></section>
       <div className="overview-grid"><section className="panel roles-panel"><div className="panel-heading"><div><span className="eyebrow">ROLE ACTIVITY</span><h2>Your openings</h2></div><button className="panel-link" onClick={() => onNavigate('jobs')}>All roles <ArrowRight size={15} /></button></div>{jobs.length ? <div className="role-list">{jobs.slice(0, 5).map((job) => <div className="role-row" key={job.id}><span className="role-symbol"><BriefcaseBusiness size={17} /></span><div className="role-title"><b>{job.title}</b><small>{(job.required_skills_json || []).slice(0, 3).join(' · ') || 'Skills not specified'}</small></div><span className={`status-pill ${job.status === 'open' ? 'status-open' : 'status-closed'}`}>{job.status}</span><span className="role-count">{job.matches_count ?? 0} <small>matches</small></span></div>)}</div> : <EmptyState icon={BriefcaseBusiness} title="No openings yet" copy="Create your first role to begin reviewing candidates." action={<button className="text-action" onClick={() => onNavigate('jobs')}>Create a job <ArrowRight size={14} /></button>} />}</section>
-      <section className="panel activity-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT RESUMES</span><h2>Candidate activity</h2></div><button className="icon-button" onClick={() => onNavigate('candidates')} aria-label="View candidates"><ArrowRight size={17} /></button></div>{(data?.recent_activities || []).length ? <div className="activity-list">{data.recent_activities.slice(0, 5).map((candidate) => <div className="activity-row" key={candidate.id}><span className="user-avatar avatar-small">{initials(candidate.parsed_name || 'Candidate')}</span><span className="activity-copy"><b>{candidate.parsed_name || `Candidate #${candidate.id}`}</b><small>{candidate.status === 'done' ? 'Resume analyzed' : candidate.status}</small></span><span className="activity-score">{candidate.ai_match_percentage || 0}%</span></div>)}</div> : <EmptyState icon={FileText} title="No candidate activity" copy="Uploaded resumes and their actual processing results will appear here." />}</section></div>
+      <section className="panel activity-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT RESUMES</span><h2>Candidate activity</h2></div><button className="icon-button" onClick={() => onNavigate('candidates')} aria-label="View candidates"><ArrowRight size={17} /></button></div>{(data?.recent_activities || []).length ? <div className="activity-list">{data.recent_activities.slice(0, 5).map((candidate) => <div className="activity-row" key={candidate.id}><span className="user-avatar avatar-small">{initials(candidate.parsed_name || 'Candidate')}</span><span className="activity-copy"><b>{candidate.parsed_name || `Candidate #${candidate.id}`}</b><small>{candidate.status === 'done' ? 'Resume analyzed' : candidate.status}</small></span><span className="activity-score">{candidate.ai_match_percentage ? `${candidate.ai_match_percentage}%` : 'Analyzed'}</span></div>)}</div> : <EmptyState icon={FileText} title="No candidate activity" copy="Uploaded resumes and their actual processing results will appear here." />}</section></div>
+      <RecruiterAnalyticsGraph analytics={data?.analytics} stats={data?.stats} />
       <section className="bottom-note"><span className="note-mark"><Sparkles size={17} /></span><span><b>AI matching is decision support.</b><small>Review extracted skills and resume context before making hiring decisions.</small></span><span className="note-actual">Scores from your configured service</span></section>
     </>}
   </div>;
+}
+
+function RecruiterAnalyticsGraph({ analytics, stats }) {
+  const [periodType, setPeriodType] = useState('months');
+  const [hoveredIdx, setHoveredIdx] = useState(null);
+
+  const dataList = (periodType === 'months' ? analytics?.months : analytics?.days) || [];
+  const maxVal = Math.max(
+    ...dataList.map((d) => Math.max(d.jobs_posted || 0, d.applications || 0, d.hired || 0)),
+    5
+  );
+
+  const totalJobs = dataList.reduce((acc, d) => acc + (d.jobs_posted || 0), 0);
+  const totalApps = dataList.reduce((acc, d) => acc + (d.applications || 0), 0);
+  const totalHired = dataList.reduce((acc, d) => acc + (d.hired || 0), 0);
+
+  return (
+    <section className="panel analytics-panel">
+      <div className="panel-heading analytics-heading">
+        <div>
+          <span className="eyebrow">HIRING & RECRUITING PULSE</span>
+          <h2>Hiring & Job Posting Analytics</h2>
+          <p className="analytics-subtitle">Compare job openings posted against candidate applications and interview clearances.</p>
+        </div>
+        <div className="analytics-controls">
+          <div className="analytics-pill-group">
+            <button
+              type="button"
+              className={`pill-btn ${periodType === 'months' ? 'active' : ''}`}
+              onClick={() => setPeriodType('months')}
+            >
+              Last 6 Months
+            </button>
+            <button
+              type="button"
+              className={`pill-btn ${periodType === 'days' ? 'active' : ''}`}
+              onClick={() => setPeriodType('days')}
+            >
+              Last 7 Days
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="analytics-legend-bar">
+        <div className="legend-items">
+          <span className="legend-item"><i className="legend-dot dot-purple" /> <b>Jobs Posted</b></span>
+          <span className="legend-item"><i className="legend-dot dot-blue" /> <b>Applications Received</b></span>
+          <span className="legend-item"><i className="legend-dot dot-green" /> <b>Candidates Cleared / Hired</b></span>
+        </div>
+        <span className="legend-scale-hint">Scaled relative to max: {maxVal}</span>
+      </div>
+
+      <div className="chart-wrapper">
+        <div className="chart-gridlines">
+          {[1, 0.75, 0.5, 0.25, 0].map((ratio) => (
+            <div key={ratio} className="gridline-row">
+              <span className="gridline-val">{Math.round(maxVal * ratio)}</span>
+              <div className="gridline-rule" />
+            </div>
+          ))}
+        </div>
+
+        <div className="chart-columns">
+          {dataList.map((item, idx) => {
+            const jobsH = Math.max(6, Math.round(((item.jobs_posted || 0) / maxVal) * 160));
+            const appsH = Math.max(6, Math.round(((item.applications || 0) / maxVal) * 160));
+            const hiredH = Math.max(6, Math.round(((item.hired || 0) / maxVal) * 160));
+            const isHovered = hoveredIdx === idx;
+
+            return (
+              <div
+                key={idx}
+                className="chart-col-group"
+                onMouseEnter={() => setHoveredIdx(idx)}
+                onMouseLeave={() => setHoveredIdx(null)}
+              >
+                {isHovered && (
+                  <div className="chart-tooltip">
+                    <span className="tooltip-title">{item.period}</span>
+                    <div className="tooltip-row">
+                      <span className="dot dot-purple" />
+                      <span>Jobs Posted:</span>
+                      <b>{item.jobs_posted || 0}</b>
+                    </div>
+                    <div className="tooltip-row">
+                      <span className="dot dot-blue" />
+                      <span>Applications:</span>
+                      <b>{item.applications || 0}</b>
+                    </div>
+                    <div className="tooltip-row">
+                      <span className="dot dot-green" />
+                      <span>Hired / Cleared:</span>
+                      <b>{item.hired || 0}</b>
+                    </div>
+                  </div>
+                )}
+
+                <div className="bars-container">
+                  <div
+                    className="chart-bar bar-purple"
+                    style={{ height: `${jobsH}px` }}
+                    title={`Jobs Posted: ${item.jobs_posted || 0}`}
+                  >
+                    {(item.jobs_posted || 0) > 0 && <span className="bar-val">{item.jobs_posted}</span>}
+                  </div>
+                  <div
+                    className="chart-bar bar-blue"
+                    style={{ height: `${appsH}px` }}
+                    title={`Applications: ${item.applications || 0}`}
+                  >
+                    {(item.applications || 0) > 0 && <span className="bar-val">{item.applications}</span>}
+                  </div>
+                  <div
+                    className="chart-bar bar-green"
+                    style={{ height: `${hiredH}px` }}
+                    title={`Hired: ${item.hired || 0}`}
+                  >
+                    {(item.hired || 0) > 0 && <span className="bar-val">{item.hired}</span>}
+                  </div>
+                </div>
+
+                <span className="chart-col-label">{item.short}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="analytics-summary-cards">
+        <div className="analytics-card">
+          <span className="kpi-label">TOTAL JOBS POSTED</span>
+          <strong>{totalJobs}</strong>
+          <small>Openings published in period</small>
+        </div>
+        <div className="analytics-card">
+          <span className="kpi-label">APPLICATIONS RECEIVED</span>
+          <strong>{totalApps}</strong>
+          <small>Candidate submissions received</small>
+        </div>
+        <div className="analytics-card">
+          <span className="kpi-label">INTERVIEWS CLEARED</span>
+          <strong style={{ color: '#059669' }}>{totalHired}</strong>
+          <small>Offers extended & accepted</small>
+        </div>
+        <div className="analytics-card">
+          <span className="kpi-label">TOTAL SHORTLISTED</span>
+          <strong>{stats?.shortlisted ?? 0}</strong>
+          <small>Active candidate pipeline</small>
+        </div>
+      </div>
+    </section>
+  );
 }
 function greeting() { const hour = new Date().getHours(); return hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'; }
 function Metric({ label, value, detail, icon: Icon, tone }) { return <article className="metric"><div className="metric-top"><span>{label}</span><i className={`metric-icon ${tone}`}><Icon size={17} /></i></div><strong>{value ?? '—'}</strong><small>{detail}</small></article>; }
@@ -562,17 +716,346 @@ function CandidateModal({ candidate, userId, onClose, onDelete }) {
   );
 }
 
-function Screening() {
-  const [jobs, setJobs] = useState([]); const [file, setFile] = useState(null); const [busy, setBusy] = useState(false); const [candidate, setCandidate] = useState(null); const [matches, setMatches] = useState([]); const [error, setError] = useState(''); const [dragging, setDragging] = useState(false);
-  useEffect(() => { api('/jobs').then((result) => setJobs((result.jobs || []).filter((job) => job.status === 'open'))).catch((e) => setError(e.message)); }, []);
-  const upload = async (event) => { event.preventDefault(); if (!file) return; setBusy(true); setError(''); setCandidate(null); setMatches([]); try { const body = new FormData(); body.append('resume', file); const result = await api('/upload-resume', { method: 'POST', body }); const id = result.candidate.id; const processed = await api(`/resumes/${id}/status`); setCandidate(processed.candidate); setMatches(processed.candidate?.matches || []); } catch (e) { setError(e.message); } finally { setBusy(false); } };
-  const acceptFile = (incoming) => { const selected = incoming?.[0]; if (!selected) return; if (!/\.(pdf|doc|docx)$/i.test(selected.name)) { setError('Choose a PDF, DOC, or DOCX resume.'); return; } if (selected.size > 10 * 1024 * 1024) { setError('Resume files must be 10 MB or smaller.'); return; } setError(''); setFile(selected); };
-  return <div className="page-content"><PageHeader eyebrow="AI-ASSISTED REVIEW" title="Resume screening" description="Upload a resume to extract details and compare it against your open roles." />
-    {error && <Notice error>{error}</Notice>}
-    {!jobs.length ? <EmptyState icon={BriefcaseBusiness} title="Create an open role first" copy="Resume matching compares a candidate against your open jobs. Add a job opening before uploading." /> : <div className="screening-layout"><section className="panel upload-panel"><div className="panel-heading"><div><span className="eyebrow">NEW SCREENING</span><h2>Add a resume</h2></div><span className="secure-label"><span /> PRIVATE</span></div><form onSubmit={upload}><div className="screening-scope"><span className="scope-icon"><Target size={17} /></span><span><b>Compare against all open roles</b><small>{jobs.length} {jobs.length === 1 ? 'role is' : 'roles are'} currently eligible for matching.</small></span></div><div className={`drop-zone ${dragging ? 'drop-active' : ''} ${file ? 'drop-has-file' : ''}`} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); acceptFile(e.dataTransfer.files); }}><input id="resume-file" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(e) => acceptFile(e.target.files)} /><label htmlFor="resume-file"><span className="drop-icon"><FileText size={20} /></span><b>{file ? file.name : 'Drop a resume here'}</b><span>{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB · Change file` : 'or browse files · PDF, DOC, DOCX'}</span></label></div><p className="upload-limit">Maximum file size 10 MB. Uploaded files are held in the backend’s private local storage.</p><button className="button button-dark upload-submit" disabled={!file || busy}>{busy ? <><span className="button-spinner" /> Processing resume…</> : <><Sparkles size={16} /> Analyze resume</>}</button></form></section>
-      <aside className="screening-aside"><div className="aside-top"><Sparkles size={17} /><span>WHAT GETS RETURNED</span></div><h3>A closer look at the resume.</h3><ul><li><Check size={15} /> Contact details, when found</li><li><Check size={15} /> Skills, education, experience</li><li><Check size={15} /> Match score and skill overlap</li><li><Check size={15} /> Candidate ranking per open role</li></ul><p>Scores and extracted details are shown only when returned by the configured AI service or local matcher.</p></aside></div>}
-    {candidate && <ScreeningResults candidate={candidate} matches={matches} />}
-  </div>;
+function Screening({ userId }) {
+  const [view, setView] = useState('list'); // 'list' | 'upload'
+  const [matches, setMatches] = useState([]);
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [selectedJobId, setSelectedJobId] = useState('all');
+  const [minScore, setMinScore] = useState('0');
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
+
+  // Resume upload state
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [uploadedCandidate, setUploadedCandidate] = useState(null);
+  const [uploadedMatches, setUploadedMatches] = useState([]);
+  const [dragging, setDragging] = useState(false);
+
+  const fetchMatches = () => {
+    setLoading(true);
+    api(`/matches${selectedJobId !== 'all' ? `?job_id=${selectedJobId}` : ''}`)
+      .then((data) => {
+        setMatches(data.matches || []);
+        if (data.jobs?.length) setJobs(data.jobs);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchMatches();
+  }, [selectedJobId]);
+
+  const acceptFile = (incoming) => {
+    const selected = incoming?.[0];
+    if (!selected) return;
+    if (!/\.(pdf|doc|docx)$/i.test(selected.name)) {
+      setError('Choose a PDF, DOC, or DOCX resume.');
+      return;
+    }
+    if (selected.size > 10 * 1024 * 1024) {
+      setError('Resume files must be 10 MB or smaller.');
+      return;
+    }
+    setError('');
+    setFile(selected);
+  };
+
+  const uploadResume = async (e) => {
+    e.preventDefault();
+    if (!file) return;
+    setBusy(true);
+    setError('');
+    setUploadedCandidate(null);
+    setUploadedMatches([]);
+    try {
+      const body = new FormData();
+      body.append('resume', file);
+      const res = await api('/upload-resume', { method: 'POST', body });
+      const id = res.candidate.id;
+      const processed = await api(`/resumes/${id}/status`);
+      setUploadedCandidate(processed.candidate);
+      setUploadedMatches(processed.candidate?.matches || []);
+      fetchMatches();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteCandidateFromScreening = async (candidate, e) => {
+    if (e) e.stopPropagation();
+    if (!window.confirm(`Delete candidate "${candidate.parsed_name || `Candidate #${candidate.id}`}"?`)) return;
+    try {
+      await api(`/candidates/${candidate.id}`, { method: 'DELETE' });
+      setSelectedCandidate(null);
+      fetchMatches();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // Filter matches
+  const filteredMatches = matches.filter((m) => {
+    const score = Number(m.match_percentage) || 0;
+    if (score < Number(minScore)) return false;
+
+    if (search) {
+      const q = search.toLowerCase();
+      const candName = (m.candidate?.parsed_name || '').toLowerCase();
+      const candEmail = (m.candidate?.parsed_email || '').toLowerCase();
+      const jobTitle = (m.job?.title || '').toLowerCase();
+      const skills = (m.skill_comparison_json?.matched || []).join(' ').toLowerCase();
+      return candName.includes(q) || candEmail.includes(q) || jobTitle.includes(q) || skills.includes(q);
+    }
+    return true;
+  });
+
+  return (
+    <div className="page-content">
+      <PageHeader
+        eyebrow="AI MATCH & SCREENING"
+        title="AI Candidate Screening"
+        description="Comprehensive table view of AI match percentages, candidate skills overlap, and automated screening results."
+        action={
+          <div className="screening-top-actions">
+            <button
+              className={`button ${view === 'list' ? 'button-dark' : 'button-quiet'}`}
+              onClick={() => setView('list')}
+            >
+              <BarChart3 size={15} /> AI Match Table ({matches.length})
+            </button>
+            <button
+              className={`button ${view === 'upload' ? 'button-dark' : 'button-quiet'}`}
+              onClick={() => setView('upload')}
+            >
+              <Plus size={15} /> Screen New Resume
+            </button>
+          </div>
+        }
+      />
+
+      {error && <Notice error>{error}</Notice>}
+
+      {view === 'upload' ? (
+        <div className="screening-upload-view">
+          <div className="upload-view-back">
+            <button className="panel-link" onClick={() => setView('list')}>
+              ← Back to AI Matches Table
+            </button>
+          </div>
+          <div className="screening-layout">
+            <section className="panel upload-panel">
+              <div className="panel-heading">
+                <div>
+                  <span className="eyebrow">NEW SCREENING</span>
+                  <h2>Upload Candidate Resume</h2>
+                </div>
+                <span className="secure-label"><span /> PRIVATE</span>
+              </div>
+              <form onSubmit={uploadResume}>
+                <div className="screening-scope">
+                  <span className="scope-icon"><Target size={17} /></span>
+                  <span>
+                    <b>Compare against all open roles</b>
+                    <small>{jobs.length} roles currently eligible for matching.</small>
+                  </span>
+                </div>
+                <div
+                  className={`drop-zone ${dragging ? 'drop-active' : ''} ${file ? 'drop-has-file' : ''}`}
+                  onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(e) => { e.preventDefault(); setDragging(false); acceptFile(e.dataTransfer.files); }}
+                >
+                  <input
+                    id="resume-file"
+                    type="file"
+                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    onChange={(e) => acceptFile(e.target.files)}
+                  />
+                  <label htmlFor="resume-file">
+                    <span className="drop-icon"><FileText size={20} /></span>
+                    <b>{file ? file.name : 'Drop candidate resume here'}</b>
+                    <span>{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB · Change file` : 'or browse files · PDF, DOC, DOCX'}</span>
+                  </label>
+                </div>
+                <p className="upload-limit">Maximum file size 10 MB. Files are stored securely in local storage.</p>
+                <button className="button button-dark upload-submit" disabled={!file || busy}>
+                  {busy ? <><span className="button-spinner" /> Processing resume…</> : <><Sparkles size={16} /> Analyze & Match Resume</>}
+                </button>
+              </form>
+            </section>
+            <aside className="screening-aside">
+              <div className="aside-top"><Sparkles size={17} /><span>SCREENING BREAKDOWN</span></div>
+              <h3>Automated skill & role scoring.</h3>
+              <ul>
+                <li><Check size={15} /> Text extraction & contact parsing</li>
+                <li><Check size={15} /> Skills matching against job requirements</li>
+                <li><Check size={15} /> Match score calculation per open role</li>
+                <li><Check size={15} /> Immediate sync to AI Match Table</li>
+              </ul>
+            </aside>
+          </div>
+          {uploadedCandidate && <ScreeningResults candidate={uploadedCandidate} matches={uploadedMatches} />}
+        </div>
+      ) : (
+        <div className="screening-list-view">
+          <div className="toolbar">
+            <label className="search-field">
+              <Search size={17} />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search candidate name, email, target role, or skill..."
+              />
+            </label>
+            <label className="filter-select">
+              <Settings2 size={16} />
+              <select value={selectedJobId} onChange={(e) => setSelectedJobId(e.target.value)}>
+                <option value="all">All job openings</option>
+                {jobs.map((j) => (
+                  <option key={j.id} value={j.id}>{j.title}</option>
+                ))}
+              </select>
+            </label>
+            <label className="filter-select">
+              <Settings2 size={16} />
+              <select value={minScore} onChange={(e) => setMinScore(e.target.value)}>
+                <option value="0">All match scores</option>
+                <option value="80">80%+ Excellent Match</option>
+                <option value="60">60%+ Good Match</option>
+                <option value="40">40%+ Fair Match</option>
+              </select>
+            </label>
+            <span className="result-count">{filteredMatches.length} AI matches</span>
+          </div>
+
+          {loading ? (
+            <Loading label="Loading AI match leaderboard..." />
+          ) : !filteredMatches.length ? (
+            <EmptyState
+              icon={Target}
+              title="No AI matches found"
+              copy="Candidate matches will appear here as resumes are screened and applications are received for your open roles."
+              action={
+                <button className="button button-dark" onClick={() => setView('upload')}>
+                  <Plus size={15} /> Screen a candidate resume
+                </button>
+              }
+            />
+          ) : (
+            <div className="candidate-table-wrap">
+              <table className="candidate-table ai-screening-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>CANDIDATE</th>
+                    <th>TARGET ROLE</th>
+                    <th>AI MATCH SCORE</th>
+                    <th>MATCHED SKILLS</th>
+                    <th>STATUS</th>
+                    <th>ACTION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredMatches.map((match, index) => {
+                    const score = Number(match.match_percentage) || 0;
+                    const candidate = match.candidate;
+                    const matchedSkills = match.skill_comparison_json?.matched || [];
+                    const app = candidate?.applications?.[0];
+                    const appStatus = app?.status || candidate?.status || 'review';
+                    const scoreTone = score >= 80 ? 'high' : score >= 60 ? 'mid' : 'low';
+
+                    return (
+                      <tr key={match.id} onClick={() => candidate && setSelectedCandidate(candidate)}>
+                        <td><span className="rank-badge">#{index + 1}</span></td>
+                        <td>
+                          <div className="candidate-name">
+                            <span className="user-avatar avatar-small">
+                              {initials(candidate?.parsed_name || 'Candidate')}
+                            </span>
+                            <span>
+                              <b>{candidate?.parsed_name || `Candidate #${match.candidate_id}`}</b>
+                              <small>{candidate?.parsed_email || candidate?.parsed_phone || 'No contact on file'}</small>
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="match-job-info">
+                            <b>{match.job?.title || `Job #${match.job_id}`}</b>
+                            {match.job?.department && <small>{match.job.department}</small>}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="ai-score-cell">
+                            <span className={`ai-score-badge tone-${scoreTone}`}>
+                              <Sparkles size={12} /> {score}%
+                            </span>
+                            <div className="ai-score-bar">
+                              <div
+                                className={`ai-bar-fill fill-${scoreTone}`}
+                                style={{ width: `${Math.min(100, Math.max(6, score))}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="tag-list compact-tags">
+                            {matchedSkills.slice(0, 3).map((skill) => (
+                              <span key={skill} className="skill-tag match-skill-chip">{skill}</span>
+                            ))}
+                            {matchedSkills.length > 3 && (
+                              <span className="skill-tag skill-more">+{matchedSkills.length - 3}</span>
+                            )}
+                            {!matchedSkills.length && <span className="muted">No overlap</span>}
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`status-pill ${
+                            appStatus === 'cleared' || appStatus === 'shortlisted' || appStatus === 'interview'
+                              ? 'status-open'
+                              : appStatus === 'rejected' || appStatus === 'failed'
+                              ? 'status-closed'
+                              : 'status-review'
+                          }`}>
+                            {appStatus === 'cleared' ? 'Cleared' : appStatus}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            className="button button-quiet btn-compact"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (candidate) setSelectedCandidate(candidate);
+                            }}
+                          >
+                            <Eye size={13} /> View
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {selectedCandidate && (
+            <CandidateModal
+              candidate={selectedCandidate}
+              userId={userId}
+              onClose={() => setSelectedCandidate(null)}
+              onDelete={deleteCandidateFromScreening}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ScreeningResults({ candidate, matches }) {
@@ -581,18 +1064,234 @@ function ScreeningResults({ candidate, matches }) {
 }
 
 function Account({ user }) {
-  const [form, setForm] = useState({ name: user.name || '', company_name: user.company_name || '', company_website: user.company_website || '', headline: user.headline || '', location: user.location || '', bio: user.bio || '' });
-  const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
+  const [form, setForm] = useState({
+    name: user.name || '',
+    company_name: user.company_name || '',
+    company_website: user.company_website || '',
+    headline: user.headline || '',
+    location: user.location || '',
+    bio: user.bio || '',
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
   const save = async (event) => {
-    event.preventDefault(); setBusy(true); setError(''); setNotice('');
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    setNotice('');
     try {
       const result = await api('/profile', { method: 'PUT', body: JSON.stringify(form) });
       sessionStorage.setItem('ats_user', JSON.stringify(result.user));
-      setNotice('Recruiter profile saved.');
-    } catch (requestError) { setError(requestError.message); }
-    finally { setBusy(false); }
+      setNotice('Recruiter profile and company summary updated successfully.');
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
   };
-  return <div className="page-content"><PageHeader eyebrow="COMPANY PROFILE" title="Recruiter account" description="Manage the recruiter and company information associated with your workspace." />{error && <Notice error>{error}</Notice>}{notice && <Notice>{notice}</Notice>}<form className="panel account-panel recruiter-profile-form" onSubmit={save}><div className="account-large"><span className="user-avatar">{initials(form.name)}</span><div><h2>{form.name}</h2><span>{user.email}</span></div></div><label>Contact name<input required maxLength="255" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label>Company name<input maxLength="255" value={form.company_name} onChange={(event) => setForm({ ...form, company_name: event.target.value })} /></label><label>Company website<input type="url" maxLength="255" value={form.company_website} onChange={(event) => setForm({ ...form, company_website: event.target.value })} placeholder="https://example.com" /></label><label>Professional headline<input maxLength="255" value={form.headline} onChange={(event) => setForm({ ...form, headline: event.target.value })} placeholder="Talent acquisition at Example Co" /></label><label>Location<input maxLength="255" value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></label><label>Company / recruiter profile<textarea rows="4" maxLength="5000" value={form.bio} onChange={(event) => setForm({ ...form, bio: event.target.value })} /></label><button className="button button-dark" disabled={busy}>{busy ? 'Saving…' : 'Save profile'}</button><dl><div><dt>Role</dt><dd>{user.role || 'Recruiter'}</dd></div><div><dt>Account ID</dt><dd>{user.id}</dd></div></dl></form></div>;
+
+  return (
+    <div className="page-content">
+      <PageHeader
+        eyebrow="RECRUITER ACCOUNT & PROFILE"
+        title="Recruiter Profile"
+        description="View your summarized recruiter details and update company information across your workspace."
+      />
+      {error && <Notice error>{error}</Notice>}
+      {notice && <Notice>{notice}</Notice>}
+
+      {/* Recruiter Summary Hero Card */}
+      <div className="recruiter-profile-hero">
+        <div className="recruiter-hero-avatar">
+          {initials(form.name || user.name)}
+        </div>
+        <div className="recruiter-hero-info">
+          <div className="recruiter-hero-top">
+            <h2>{form.name || user.name}</h2>
+            <span className="recruiter-role-badge">
+              <Award size={12} /> Recruiter & Hiring Lead
+            </span>
+          </div>
+          <p className="recruiter-hero-headline">
+            {form.headline || (form.company_name ? `Talent Acquisition at ${form.company_name}` : 'Hiring Specialist & Talent Lead')}
+          </p>
+          <div className="recruiter-hero-meta">
+            <span><Building2 size={13} /> {form.company_name || 'Organization not specified'}</span>
+            <span><Mail size={13} /> {user.email}</span>
+            <span><MapPin size={13} /> {form.location || 'Headquarters / Remote'}</span>
+            {form.company_website && (
+              <a href={form.company_website} target="_blank" rel="noopener noreferrer" className="hero-link">
+                <Globe size={13} /> {form.company_website.replace(/^https?:\/\//, '')}
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Summarised Workspace Snapshot Grid */}
+      <div className="recruiter-stats-grid">
+        <div className="recruiter-stat-card">
+          <div className="stat-card-top">
+            <span className="stat-label">ORGANIZATION</span>
+            <Building2 size={16} />
+          </div>
+          <strong>{form.company_name || 'Your Company'}</strong>
+          <small>{form.company_website || 'Add website in details below'}</small>
+        </div>
+        <div className="recruiter-stat-card">
+          <div className="stat-card-top">
+            <span className="stat-label">WORKSPACE ROLE</span>
+            <Award size={16} />
+          </div>
+          <strong>{user.role === 'hr' ? 'Hiring Lead / HR' : user.role || 'Recruiter'}</strong>
+          <small>Full recruiting & candidate management</small>
+        </div>
+        <div className="recruiter-stat-card">
+          <div className="stat-card-top">
+            <span className="stat-label">OFFICE LOCATION</span>
+            <MapPin size={16} />
+          </div>
+          <strong>{form.location || 'Not set'}</strong>
+          <small>Primary hiring jurisdiction</small>
+        </div>
+        <div className="recruiter-stat-card">
+          <div className="stat-card-top">
+            <span className="stat-label">ACCOUNT ID</span>
+            <UserRound size={16} />
+          </div>
+          <strong>#{user.id}</strong>
+          <small>Verified recruiter account</small>
+        </div>
+      </div>
+
+      {/* Recruiter Bio / About Summary (if provided) */}
+      {form.bio && (
+        <div className="recruiter-bio-summary">
+          <span className="eyebrow">COMPANY & RECRUITER SUMMARY</span>
+          <p>{form.bio}</p>
+        </div>
+      )}
+
+      {/* Edit & Update Profile Form */}
+      <form className="panel recruiter-edit-panel" onSubmit={save}>
+        <div className="edit-panel-header">
+          <div className="edit-panel-icon"><Settings2 size={20} /></div>
+          <div>
+            <span className="eyebrow">EDIT & UPDATE PROFILE</span>
+            <h2>Update recruiter details</h2>
+            <p>Modify contact info, company details, and hiring headlines displayed to applicants.</p>
+          </div>
+        </div>
+
+        <div className="edit-form-section">
+          <div className="edit-section-label"><UserRound size={14} /> Personal Information</div>
+          <div className="form-grid-2">
+            <div className="form-field">
+              <label htmlFor="prof-name">Contact full name</label>
+              <input
+                id="prof-name"
+                required
+                maxLength="255"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="e.g. Jane Doe"
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="prof-email">Registered email <span className="field-lock">🔒 Read-only</span></label>
+              <input
+                id="prof-email"
+                disabled
+                value={user.email}
+                readOnly
+                className="input-disabled"
+                title="Registered account email — cannot be changed"
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="prof-headline">Professional headline</label>
+              <input
+                id="prof-headline"
+                maxLength="255"
+                value={form.headline}
+                onChange={(e) => setForm({ ...form, headline: e.target.value })}
+                placeholder="e.g. Lead Talent Acquisition Partner"
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="prof-location">Hiring location / Office</label>
+              <input
+                id="prof-location"
+                maxLength="255"
+                value={form.location}
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
+                placeholder="e.g. New York, NY · Hybrid"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="edit-form-section">
+          <div className="edit-section-label"><Building2 size={14} /> Company Details</div>
+          <div className="form-grid-2">
+            <div className="form-field">
+              <label htmlFor="prof-company">Company / Organization name</label>
+              <input
+                id="prof-company"
+                maxLength="255"
+                value={form.company_name}
+                onChange={(e) => setForm({ ...form, company_name: e.target.value })}
+                placeholder="e.g. Acme Innovations"
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="prof-website">Company website URL</label>
+              <div className="input-with-icon">
+                <Globe size={14} />
+                <input
+                  id="prof-website"
+                  type="url"
+                  maxLength="255"
+                  value={form.company_website}
+                  onChange={(e) => setForm({ ...form, company_website: e.target.value })}
+                  placeholder="https://example.com"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="edit-form-section">
+          <div className="edit-section-label"><FileText size={14} /> Company Bio & Overview</div>
+          <div className="form-field">
+            <label htmlFor="prof-bio">Company & Recruiter overview</label>
+            <textarea
+              id="prof-bio"
+              rows="5"
+              maxLength="5000"
+              value={form.bio}
+              onChange={(e) => setForm({ ...form, bio: e.target.value })}
+              placeholder="Introduce your company culture, mission, and what your hiring team looks for in candidates..."
+            />
+            <span className="field-char-count">{form.bio.length} / 5,000 characters</span>
+          </div>
+        </div>
+
+        <div className="form-action-bar">
+          <span className="form-action-hint">All changes are applied immediately across your workspace.</span>
+          <button className="button button-dark" disabled={busy}>
+            {busy ? (
+              <><span className="button-spinner" /> Saving changes…</>
+            ) : (
+              <><Check size={16} /> Save Profile Changes</>
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 }
 
 export default App;
